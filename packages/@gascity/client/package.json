@@ -34,13 +34,14 @@
     "build": "tsdown",
     "typecheck": "bunx tsc --noEmit",
     "test": "vitest",
-    "test:e2e": "playwright test --config=tests/e2e/playwright.config.ts"
+    "test:e2e": "playwright test --config=tests/e2e/playwright.config.ts",
+    "release": "nx release"
   },
   "type": "module",
   "types": "./dist/index.d.ts",
   "dependencies": {
-    "axios": "^1.7.9",
+    "axios": "^1.18.0",
     "form-data": "^4.0.6",
-    "zod": "^3.23.8"
+    "zod": "^3.25.76"
   }
 }

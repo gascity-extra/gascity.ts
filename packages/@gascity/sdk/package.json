@@ -32,7 +32,8 @@
     "build": "tsdown",
     "typecheck": "bunx tsc --noEmit",
     "test": "vitest",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "release": "nx release"
   },
   "type": "module",
   "types": "./dist/index.d.ts",

@@ -15,8 +15,8 @@ Modern Console UI for managing Gas City resources, built with TanStack Start.
 
 ### Prerequisites
 
-- Node.js 18+
-- Bun 1.0+
+- Node.js 24+
+- Bun 1.3.14+
 
 ### Setup
 

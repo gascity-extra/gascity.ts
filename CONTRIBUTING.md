@@ -20,8 +20,8 @@ This project adheres to a Code of Conduct. By participating, you are expected to
 
 ### Prerequisites
 
-- Node.js 18+ 
-- Bun 1.0+
+- Node.js 24+
+- Bun 1.3.14+
 - Git
 
 ### Setup
