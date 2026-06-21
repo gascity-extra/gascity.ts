@@ -1,14 +1,15 @@
-# Conventional commits pattern: type(scope): description
+# Conventional commits pattern: type(scope)!: description or type(scope): description
 # Types: feat, fix, docs, style, refactor, test, chore, perf, ci, build, revert
-PATTERN="^(feat|fix|docs|style|refactor|test|chore|perf|ci|build|revert)(\(.+\))?: .{1,}"
+PATTERN="^(feat|fix|docs|style|refactor|test|chore|perf|ci|build|revert)(\(.+\))?!?: .{1,}"
 
 if ! grep -qE "$PATTERN" "$1"; then
   echo "❌ Invalid commit message format."
   echo "📝 Conventional commits format required:"
   echo "   type(scope): description"
+  echo "   type(scope)!: description (for breaking changes)"
   echo ""
   echo "   Types: feat, fix, docs, style, refactor, test, chore, perf, ci, build, revert"
   echo "   Example: feat(auth): add login functionality"
-  echo "   Example: fix: resolve memory leak"
+  echo "   Example: fix!: resolve memory leak (breaking change)"
   exit 1
 fi
