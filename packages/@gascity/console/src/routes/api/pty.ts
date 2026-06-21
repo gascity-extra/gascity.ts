@@ -9,6 +9,9 @@
  * In TanStack Start dev mode, this runs on the Node-based Vite SSR server,
  * which can spawn subprocesses. Do NOT deploy to a Worker runtime — this is
  * local-only by design.
+ *
+ * SECURITY: This route is disabled in production and requires development mode.
+ * Input validation is applied to prevent command injection.
  */
 import { createFileRoute } from "@tanstack/react-router";
 
@@ -16,11 +19,29 @@ export const Route = createFileRoute("/api/pty")({
   server: {
     handlers: {
       GET: async ({ request }) => {
+        // Security: Disable in production environments
+        if (process.env.NODE_ENV === "production") {
+          return new Response(
+            JSON.stringify({ error: "PTY endpoint is disabled in production" }),
+            { status: 403, headers: { "content-type": "application/json" } },
+          );
+        }
+
         const url = new URL(request.url);
         const name = url.searchParams.get("name");
         if (!name) {
           return new Response(
             JSON.stringify({ error: "missing ?name=<session>" }),
+            { status: 400, headers: { "content-type": "application/json" } },
+          );
+        }
+
+        // Security: Validate name parameter to prevent command injection
+        // Allow only alphanumeric, underscore, hyphen, and dot characters
+        const nameValidation = /^[a-zA-Z0-9_.-]{1,64}$/;
+        if (!nameValidation.test(name)) {
+          return new Response(
+            JSON.stringify({ error: "invalid session name (allowed: a-zA-Z0-9_.-, max 64 chars)" }),
             { status: 400, headers: { "content-type": "application/json" } },
           );
         }
@@ -82,6 +103,20 @@ export const Route = createFileRoute("/api/pty")({
           const ws = await upgrade();
           const cols = Number(url.searchParams.get("cols") || 120);
           const rows = Number(url.searchParams.get("rows") || 30);
+
+          // Security: Validate cols and rows are finite integers within sane bounds
+          if (!Number.isInteger(cols) || cols < 10 || cols > 512) {
+            return new Response(
+              JSON.stringify({ error: "invalid cols (must be integer between 10-512)" }),
+              { status: 400, headers: { "content-type": "application/json" } },
+            );
+          }
+          if (!Number.isInteger(rows) || rows < 5 || rows > 256) {
+            return new Response(
+              JSON.stringify({ error: "invalid rows (must be integer between 5-256)" }),
+              { status: 400, headers: { "content-type": "application/json" } },
+            );
+          }
 
           const tmuxBin = process.env.TMUX_BIN || "tmux";
           const term = ptyMod.spawn(tmuxBin, ["attach", "-t", name], {
