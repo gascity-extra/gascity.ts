@@ -118,7 +118,15 @@ export const Route = createFileRoute("/api/pty")({
             );
           }
 
+          // Security: Validate TMUX_BIN environment variable to prevent command injection
           const tmuxBin = process.env.TMUX_BIN || "tmux";
+          const tmuxBinValidation = /^[a-zA-Z0-9_\-/]+$/;
+          if (!tmuxBinValidation.test(tmuxBin)) {
+            return new Response(
+              JSON.stringify({ error: "invalid TMUX_BIN environment variable (allowed: a-zA-Z0-9_-)" }),
+              { status: 400, headers: { "content-type": "application/json" } },
+            );
+          }
           const term = ptyMod.spawn(tmuxBin, ["attach", "-t", name], {
             name: "xterm-256color",
             cols,
