@@ -15,16 +15,16 @@ echo "AutoRegister: ${AUTOREGISTER}"
 WORKSPACE_DIR=""
 
 # Check common workspace locations
-if [ -d "/workspaces/gascity-devcontainer" ]; then
+if [[ -d "/workspaces/gascity-devcontainer" ]]; then
     WORKSPACE_DIR="/workspaces/gascity-devcontainer"
-elif [ -d "/workspaces/gascity.ts" ]; then
+elif [[ -d "/workspaces/gascity.ts" ]]; then
     WORKSPACE_DIR="/workspaces/gascity.ts"
-elif [ -d "/workspaces/$(basename "${PWD}")" ]; then
+elif [[ -d "/workspaces/$(basename "${PWD}")" ]]; then
     WORKSPACE_DIR="/workspaces/$(basename "${PWD}")"
 fi
 
 # Navigate to workspace if found
-if [ -n "$WORKSPACE_DIR" ]; then
+if [[ -n "$WORKSPACE_DIR" ]]; then
     echo "Navigating to workspace: ${WORKSPACE_DIR}"
     cd "$WORKSPACE_DIR"
 elif git rev-parse --git-dir > /dev/null 2>&1; then
@@ -35,7 +35,7 @@ else
     AUTOREGISTER="false"
 fi
 
-if [ "${AUTOREGISTER}" = "true" ]; then
+if [[ "${AUTOREGISTER}" = "true" ]]; then
     echo "Registering city with supervisor..."
     if command -v dolt &> /dev/null && command -v gc &> /dev/null; then
         # Configure Dolt identity (required for gc register)

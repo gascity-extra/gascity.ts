@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test } from '@playwright/test';
 
 /**
  * Documentation Screenshots
@@ -66,14 +66,10 @@ test.describe('Documentation Screenshots', () => {
     
     // Toggle dark mode if available
     // This depends on your implementation
-    try {
-      const darkModeToggle = page.getByLabel('dark mode');
-      if (await darkModeToggle.isVisible()) {
-        await darkModeToggle.click();
-        await page.waitForTimeout(500);
-      }
-    } catch (e) {
-      // Dark mode toggle not found, skip
+    const darkModeToggle = page.getByLabel('dark mode');
+    if (await darkModeToggle.isVisible()) {
+      await darkModeToggle.click();
+      await page.waitForTimeout(500);
     }
     
     await page.screenshot({ path: 'docs/screenshots/dark-mode.png' });
