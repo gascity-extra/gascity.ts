@@ -53,7 +53,9 @@
       "packageManager": "npm"
     }
   },
-  "plugins": [],
+  "plugins": [
+    "@nx/js"
+  ],
   "workspaceLayout": {
     "appsDir": "packages",
     "libsDir": "packages"
