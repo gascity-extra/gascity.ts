@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, afterEach } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import { createEventSourceStream } from '../../../src/helpers/streaming';
 
 // Mock EventSource
@@ -32,7 +32,7 @@ class MockEventSource {
 }
 
 // Mock global EventSource
-global.EventSource = MockEventSource as any;
+globalThis.EventSource = MockEventSource as any;
 
 describe.skip('Streaming Helper', () => {
   describe('createEventSourceStream', () => {

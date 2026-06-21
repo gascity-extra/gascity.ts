@@ -5,7 +5,6 @@ import {
   subscribeToEvents,
   type EventOptions,
   type EventSubscription,
-  type EventCorrelation,
 } from '../../../src/workflows/events';
 
 // Mock EventSource

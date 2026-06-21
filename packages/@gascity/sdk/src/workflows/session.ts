@@ -413,12 +413,10 @@ export async function resetSession(sessionId: string, city?: string, csrfToken?:
  * console.log('Conversation history:', transcript);
  * ```
  */
-export async function getSessionTranscript(sessionId: string, city?: string): Promise<any> {
-  const cityName = city || 'default';
-
+export async function getSessionTranscript(sessionId: string, city: string = 'default'): Promise<any> {
   const response = await withRetry(async () => {
     return await DefaultService.getV0CityByCityNameSessionByIdTranscript(
-      cityName,
+      city,
       sessionId
     );
   }, DEFAULT_RETRY_CONFIG, 'Get session transcript');
