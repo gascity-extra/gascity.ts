@@ -1,6 +1,6 @@
 /**
- * Gas City API Types
- * Type definitions for Gas City API responses
+ * Gas City Console Types
+ * Type definitions for Gas City console UI
  */
 
 export interface FormulaStep {
@@ -10,4 +10,7 @@ export interface FormulaStep {
   status?: "idle" | "running" | "completed" | "error";
   output?: string;
   error?: string;
+  agent?: string;
+  depends_on?: string[];
+  bead_id?: string;
 }

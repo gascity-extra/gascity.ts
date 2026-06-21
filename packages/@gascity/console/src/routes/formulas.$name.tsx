@@ -10,7 +10,7 @@ import {
   gcFormulaRunStatus,
   gcFormulaShow,
 } from "@/lib/gc.functions";
-import type { FormulaStep } from "@/lib/gc-api/types";
+import type { FormulaStep } from "@/lib/types";
 
 export const Route = createFileRoute("/formulas/$name")({
   head: ({ params }) => ({
