@@ -34,26 +34,44 @@ echo "Homebrew installed successfully!"
 # Install packages if specified
 if [ -n "$PACKAGES" ]; then
     echo "Installing packages: $PACKAGES"
-    
+
     # Convert JSON array to space-separated list
     PACKAGES_LIST=$(echo "$PACKAGES" | sed 's/\[//g' | sed 's/\]//g' | sed 's/,/ /g' | tr -d '"')
-    
-    if [ "$(id -u)" = "0" ]; then
-        sudo -u vscode /home/linuxbrew/.linuxbrew/bin/brew install "$PACKAGES_LIST" || sudo -u vscode /home/linuxbrew/.linuxbrew/bin/brew upgrade "$PACKAGES_LIST"
+
+    if [ -z "$PACKAGES_LIST" ]; then
+        echo "Warning: No packages to install (empty package list)"
     else
-        brew install "$PACKAGES_LIST" || brew upgrade "$PACKAGES_LIST"
-    fi
-    
-    echo "Packages installed successfully!"
-    
-    # Create symlinks for common binaries
-    for package in $PACKAGES_LIST; do
-        # Extract package name (last part after /)
-        package_name=$(echo "$package" | awk -F'/' '{print $NF}')
-        if [ -f "/home/linuxbrew/.linuxbrew/bin/$package_name" ] && [ ! -f "/usr/local/bin/$package_name" ]; then
-            ln -sf "/home/linuxbrew/.linuxbrew/bin/$package_name" "/usr/local/bin/$package_name"
+        if [ "$(id -u)" = "0" ]; then
+            sudo -u vscode /home/linuxbrew/.linuxbrew/bin/brew install $PACKAGES_LIST || sudo -u vscode /home/linuxbrew/.linuxbrew/bin/brew upgrade $PACKAGES_LIST
+        else
+            brew install $PACKAGES_LIST || brew upgrade $PACKAGES_LIST
         fi
-    done
+
+        echo "Packages installed successfully!"
+
+        # Create symlinks for common binaries
+        for package in $PACKAGES_LIST; do
+            # Extract package name (last part after /)
+            package_name=$(echo "$package" | awk -F'/' '{print $NF}')
+
+            # Check multiple possible locations for the binary
+            BINARY_LOCATIONS=(
+                "/home/linuxbrew/.linuxbrew/bin/$package_name"
+                "/home/linuxbrew/.linuxbrew/Cellar/$package_name/*/bin/$package_name"
+            )
+
+            for binary_path in "${BINARY_LOCATIONS[@]}"; do
+                # Expand glob patterns
+                for expanded_path in $binary_path; do
+                    if [ -f "$expanded_path" ] && [ ! -f "/usr/local/bin/$package_name" ]; then
+                        echo "Creating symlink for $package_name in /usr/local/bin..."
+                        ln -sf "$expanded_path" "/usr/local/bin/$package_name"
+                        break 2  # Break both loops once symlink is created
+                    fi
+                done
+            done
+        done
+    fi
 fi
 
 echo "Run 'eval \$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)' to enable in your shell"

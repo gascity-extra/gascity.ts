@@ -3,7 +3,9 @@ set -e
 
 # Devin CLI Installation Script
 
-echo "Installing Devin CLI..."
+VERSION=${VERSION:-"latest"}
+
+echo "Installing Devin CLI (version: ${VERSION})..."
 
 # Install curl if not available
 if ! command -v curl &> /dev/null; then
@@ -11,6 +13,8 @@ if ! command -v curl &> /dev/null; then
 fi
 
 # Install official Devin CLI (ignore login errors in non-interactive mode)
+# Note: The official installer doesn't currently support version selection
+# The VERSION parameter is reserved for future use when the installer supports it
 curl -fsSL https://cli.devin.ai/install.sh | bash || true
 
 # Copy devin to /usr/local/bin for global access

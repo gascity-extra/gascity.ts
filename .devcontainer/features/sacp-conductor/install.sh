@@ -14,16 +14,21 @@ fi
 if ! command -v rustup &> /dev/null; then
     echo "Installing Rust toolchain..."
     curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
-    if [ -f "$HOME/.cargo/env" ]; then
-        source "$HOME/.cargo/env"
-    fi
+fi
+
+# Source cargo env if it exists
+if [ -f "$HOME/.cargo/env" ]; then
+    source "$HOME/.cargo/env"
+fi
+
+# Ensure cargo is in PATH
+if ! command -v cargo &> /dev/null; then
+    echo "Error: cargo not found in PATH after Rust installation"
+    exit 1
 fi
 
 # Install sacp-conductor
 echo "Installing sacp-conductor via cargo..."
-if [ -f "$HOME/.cargo/env" ]; then
-    source "$HOME/.cargo/env"
-fi
 cargo install sacp-conductor
 
 # Create symlink for sacp-conductor
