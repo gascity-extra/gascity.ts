@@ -18,14 +18,14 @@
     "prepare": "husky"
   },
   "devDependencies": {
-    "@nx/workspace": "latest",
-    "biome": "latest",
-    "husky": "^9.0.0",
-    "nx": "latest",
-    "oxlint": "latest",
-    "tsdown": "latest",
+    "@nx/workspace": "^23.0.0",
+    "biome": "^0.3.3",
+    "husky": "^9.1.7",
+    "nx": "^23.0.0",
+    "oxlint": "^1.70.0",
+    "tsdown": "^0.22.3",
     "typescript": "^6.0.3",
-    "vitest": "latest"
+    "vitest": "^4.1.9"
   },
   "engines": {
     "node": ">=18.0.0",
