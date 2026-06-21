@@ -1,5 +1,4 @@
 import axios, { type AxiosInstance, type AxiosRequestConfig } from 'axios';
-import type { OpenAPIConfig } from '../generated/core/OpenAPI';
 import { OpenAPI } from '../generated/core/OpenAPI';
 
 /**
