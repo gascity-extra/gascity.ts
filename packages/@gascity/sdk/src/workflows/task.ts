@@ -201,11 +201,9 @@ export async function waitForTaskCompletion(
       if (isErrorModel(bead)) {
         // This is an ErrorModel - bead not found yet, continue waiting
         // This is expected during the initial polling phase
-      } else {
+      } else if (bead.status === 'closed') {
         // Check if bead is closed (completed)
-        if (bead.status === 'closed') {
-          return;
-        }
+        return;
       }
     } catch (error) {
       // Bead not found yet, continue waiting
