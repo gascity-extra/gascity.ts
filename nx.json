@@ -43,7 +43,8 @@
       "workspaceChangelog": true,
       "createRelease": "github",
       "gitTagPattern": "{version}",
-      "gitRemote": "origin"
+      "gitRemote": "origin",
+      "automaticFromRef": true
     },
     "git": {
       "commit": true,
