@@ -7,6 +7,7 @@ node_modules/
 coverage/
 *.lcov
 .nyc_output
+test-results
 
 # Build outputs
 dist/
@@ -47,7 +48,8 @@ lerna-debug.log*
 .env.local
 .env.*.local
 
-# Lock files (we use bun.lockb)
+# Lock files (we use bun.lockb in root only)
 package-lock.json
 yarn.lock
 pnpm-lock.yaml
+packages/*/bun.lock
