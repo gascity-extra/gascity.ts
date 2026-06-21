@@ -1,0 +1,60 @@
+{
+  "name": "gascity.ts",
+  "version": "1.0.0",
+  "private": true,
+  "description": "TypeScript SDK and Console for Gas City - AI agent orchestration platform",
+  "type": "module",
+  "workspaces": [
+    "packages/@gascity/*",
+    "apps/*"
+  ],
+  "scripts": {
+    "dev": "nx run @gascity/console:dev",
+    "build": "nx run-many -t build",
+    "test": "nx run-many -t test",
+    "lint": "nx run-many -t lint",
+    "format": "biome check --write .",
+    "typecheck": "nx run-many -t typecheck",
+    "prepare": "husky"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.17.0",
+    "@lovable.dev/vite-tanstack-config": "^2.5.3",
+    "@nx/workspace": "^23.0.0",
+    "@playwright/test": "^1.61.0",
+    "@tailwindcss/vite": "^4.3.1",
+    "@tanstack/router-plugin": "^1.168.18",
+    "@types/node": "^22.10.2",
+    "@types/react": "^19.2.17",
+    "@types/react-dom": "^19.2.3",
+    "@vitejs/plugin-react": "^6.0.2",
+    "biome": "^0.3.3",
+    "eslint": "^9.17.0",
+    "eslint-config-prettier": "^10.1.8",
+    "eslint-plugin-prettier": "^5.5.6",
+    "eslint-plugin-react-hooks": "^7.1.1",
+    "eslint-plugin-react-refresh": "^0.5.3",
+    "globals": "^17.6.0",
+    "husky": "^9.1.7",
+    "nitro": "3.0.260610-beta",
+    "nx": "^23.0.0",
+    "openapi-typescript-codegen": "^0.31.0",
+    "oxlint": "^1.70.0",
+    "playwright": "^1.61.0",
+    "prettier": "^3.4.2",
+    "tsdown": "^0.22.3",
+    "typescript": "^5.7.2",
+    "typescript-eslint": "^8.61.1",
+    "vite": "^6.0.5",
+    "vite-tsconfig-paths": "^6.1.1",
+    "vitest": "^4.1.9"
+  },
+  "engines": {
+    "node": ">=18.0.0",
+    "bun": ">=1.0.0"
+  },
+  "packageManager": "bun@1.1.0",
+  "dependencies": {
+    "eventemitter3": "^5.0.4"
+  }
+}

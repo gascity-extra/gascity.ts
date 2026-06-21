@@ -1,0 +1,25 @@
+{
+  "name": "@gascity/sdk",
+  "version": "1.0.0",
+  "main": "./dist/index.js",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "description": "High-level workflows for Gas City - AI agent orchestration platform",
+  "scripts": {
+    "build": "tsdown",
+    "typecheck": "bunx tsc --noEmit",
+    "test": "vitest",
+    "test:e2e": "playwright test"
+  },
+  "type": "module",
+  "types": "./dist/index.d.ts",
+  "dependencies": {
+    "@gascity/client": "workspace:*",
+    "eventemitter3": "^5.0.4",
+    "zod": "^4.4.3"
+  }
+}

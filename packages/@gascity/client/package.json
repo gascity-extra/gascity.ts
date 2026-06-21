@@ -1,0 +1,27 @@
+{
+  "name": "@gascity/client",
+  "version": "1.0.0",
+  "main": "./dist/index.js",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "files": ["dist"],
+  "description": "Type-safe Gas City API client generated from OpenAPI specification",
+  "scripts": {
+    "generate": "bun scripts/generate-openapi.ts",
+    "build": "tsdown",
+    "typecheck": "bunx tsc --noEmit",
+    "test": "vitest",
+    "test:e2e": "playwright test --config=tests/e2e/playwright.config.ts"
+  },
+  "type": "module",
+  "types": "./dist/index.d.ts",
+  "dependencies": {
+    "axios": "^1.7.9",
+    "form-data": "^4.0.6",
+    "zod": "^3.23.8"
+  }
+}

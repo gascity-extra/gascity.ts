@@ -1,0 +1,10 @@
+{
+  "id": "sacp-conductor",
+  "name": "sacp-conductor",
+  "description": "Install sacp-conductor for ACP proxy orchestration",
+  "version": "1.0.0",
+  "options": {},
+  "installsAfter": [
+    "ghcr.io/devcontainers/features/common-utils"
+  ]
+}
