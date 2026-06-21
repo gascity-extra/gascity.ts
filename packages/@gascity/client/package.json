@@ -8,6 +8,7 @@
       "types": "./dist/index.d.ts"
     }
   },
+  "files": ["dist"],
   "description": "Type-safe Gas City API client generated from OpenAPI specification",
   "scripts": {
     "generate": "bun scripts/generate-openapi.ts",

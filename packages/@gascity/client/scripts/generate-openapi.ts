@@ -11,7 +11,7 @@ const OPENAPI_FILE = 'openapi.json';
 async function main() {
   try {
     console.log('📥 Downloading OpenAPI specification...');
-    await $`curl -o ${OPENAPI_FILE} ${OPENAPI_URL}`;
+    await $`curl --fail --location --show-error -o ${OPENAPI_FILE} ${OPENAPI_URL}`;
     console.log('✅ OpenAPI specification downloaded');
 
     console.log('🔨 Generating OpenAPI client...');

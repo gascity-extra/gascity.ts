@@ -66,7 +66,7 @@ export async function gcCityStop() {
 
 export async function gcHealth() {
   try {
-    const response = await DefaultService.getV0Health();
+    const response = await DefaultService.getHealth();
     if ('detail' in response) {
       return {
         reachable: false,
@@ -123,7 +123,7 @@ export async function gcSupervisorRestart() {
 
 export async function gcVersion() {
   try {
-    const response = await DefaultService.getV0Health();
+    const response = await DefaultService.getHealth();
     if ('detail' in response) {
       return {
         version: "1.0.0",
