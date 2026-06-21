@@ -19,16 +19,21 @@ describe('Event Correlation Helper', () => {
     it('should generate ID with correct format', () => {
       const id = generateEventCorrelationId();
 
-      expect(id).toMatch(/^corr-\d+-[a-z0-9]+$/);
+      // New format: corr-{uuid} where uuid is 8-4-4-4-12 hex format
+      expect(id).toMatch(/^corr-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/);
     });
 
-    it('should generate IDs with timestamp component', () => {
+    it('should generate IDs with UUID component', () => {
       const id = generateEventCorrelationId();
       const parts = id.split('-');
 
       expect(parts[0]).toBe('corr');
-      expect(parts[1]).toMatch(/^\d+$/); // Timestamp
-      expect(parts[2]).toMatch(/^[a-z0-9]+$/); // Random string
+      // UUID format: 8-4-4-4-12 hex characters
+      expect(parts[1]).toMatch(/^[0-9a-f]{8}$/);
+      expect(parts[2]).toMatch(/^[0-9a-f]{4}$/);
+      expect(parts[3]).toMatch(/^[0-9a-f]{4}$/);
+      expect(parts[4]).toMatch(/^[0-9a-f]{4}$/);
+      expect(parts[5]).toMatch(/^[0-9a-f]{12}$/);
     });
 
     it('should generate different IDs when called rapidly', () => {
