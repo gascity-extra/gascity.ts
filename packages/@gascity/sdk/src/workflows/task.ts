@@ -5,6 +5,7 @@ export interface TaskConfig {
   task: string;
   city?: string;
   metadata?: Record<string, string>;
+  csrfToken?: string; // Anti-CSRF token for API requests
 }
 
 export interface TaskCompletionOptions {
@@ -126,7 +127,7 @@ export function generateCorrelationId(): string {
 export async function slingTask(config: TaskConfig): Promise<SlingResponse> {
   const correlationId = generateCorrelationId();
   const cityName = config.city || 'default';
-  const xGcRequest = 'sdk-request'; // Anti-CSRF header
+  const xGcRequest = config.csrfToken;
   
   const enrichedVars = {
     ...config.metadata,
@@ -268,9 +269,9 @@ export async function monitorTask(beadId: string, city: string): Promise<Bead> {
  * console.log('Task closed successfully');
  * ```
  */
-export async function closeTask(beadId: string, city: string): Promise<void> {
+export async function closeTask(beadId: string, city: string, csrfToken?: string): Promise<void> {
   return withRetry(async () => {
-    const xGcRequest = 'sdk-request'; // Anti-CSRF header
+    const xGcRequest = csrfToken;
     const response = await DefaultService.postV0CityByCityNameBeadByIdClose(
       xGcRequest,
       city,
@@ -300,9 +301,9 @@ export async function closeTask(beadId: string, city: string): Promise<void> {
  * console.log('Task reopened for processing');
  * ```
  */
-export async function reopenTask(beadId: string, city: string): Promise<void> {
+export async function reopenTask(beadId: string, city: string, csrfToken?: string): Promise<void> {
   return withRetry(async () => {
-    const xGcRequest = 'sdk-request'; // Anti-CSRF header
+    const xGcRequest = csrfToken;
     const response = await DefaultService.postV0CityByCityNameBeadByIdReopen(
       xGcRequest,
       city,

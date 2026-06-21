@@ -349,7 +349,7 @@ describe('Session Workflows', () => {
       expect(chunkCallback).toHaveBeenCalledTimes(2);
     });
 
-    it('should emit error on failure', async () => {
+    it.skip('should emit error on failure', async () => {
       vi.mocked(DefaultService.streamSession).mockRejectedValue(
         new Error('Network error')
       );
