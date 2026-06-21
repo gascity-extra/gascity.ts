@@ -2,7 +2,10 @@
 # Types: feat, fix, docs, style, refactor, test, chore, perf, ci, build, revert
 PATTERN="^(feat|fix|docs|style|refactor|test|chore|perf|ci|build|revert)(\(.+\))?!?: .{1,}"
 
-if ! grep -qE "$PATTERN" "$1"; then
+# Get only the first line (subject) of the commit message
+SUBJECT=$(head -n 1 "$1")
+
+if ! echo "$SUBJECT" | grep -qE "$PATTERN"; then
   echo "❌ Invalid commit message format."
   echo "📝 Conventional commits format required:"
   echo "   type(scope): description"
