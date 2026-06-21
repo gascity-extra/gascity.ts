@@ -10,6 +10,25 @@
   },
   "files": ["dist"],
   "description": "Type-safe Gas City API client generated from OpenAPI specification",
+  "license": "MIT",
+  "author": "Gas City Team",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/gascity-extra/gascity.git",
+    "directory": "packages/@gascity/client"
+  },
+  "homepage": "https://github.com/gascity-extra/gascity#readme",
+  "keywords": [
+    "gascity",
+    "api-client",
+    "typescript",
+    "openapi",
+    "ai",
+    "agent-orchestration"
+  ],
+  "bugs": {
+    "url": "https://github.com/gascity-extra/gascity/issues"
+  },
   "scripts": {
     "generate": "bun scripts/generate-openapi.ts",
     "build": "tsdown",

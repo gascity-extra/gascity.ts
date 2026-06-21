@@ -106,6 +106,10 @@ devcontainer exec --workspace-folder . bash
 
 See [CONTRIBUTING.md](./CONTRIBUTING.md) for guidelines on how to contribute to this project.
 
+## Publishing
+
+See [docs/PUBLISHING.md](./docs/PUBLISHING.md) for information about publishing packages to npm.
+
 ## Changelog
 
 See [CHANGELOG.md](./CHANGELOG.md) for a list of changes in each version.

@@ -9,6 +9,25 @@
     }
   },
   "description": "High-level workflows for Gas City - AI agent orchestration platform",
+  "license": "MIT",
+  "author": "Gas City Team",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/gascity-extra/gascity.git",
+    "directory": "packages/@gascity/sdk"
+  },
+  "homepage": "https://github.com/gascity-extra/gascity#readme",
+  "keywords": [
+    "gascity",
+    "sdk",
+    "typescript",
+    "ai",
+    "agent-orchestration",
+    "workflows"
+  ],
+  "bugs": {
+    "url": "https://github.com/gascity-extra/gascity/issues"
+  },
   "scripts": {
     "build": "tsdown",
     "typecheck": "bunx tsc --noEmit",

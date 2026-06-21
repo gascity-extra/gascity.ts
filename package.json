@@ -16,7 +16,9 @@
     "format": "biome check --write .",
     "typecheck": "nx run-many -t typecheck",
     "prepare": "husky",
-    "screenshots": "bash docs/screenshots/generate.sh"
+    "screenshots": "bash docs/screenshots/generate.sh",
+    "publish": "bash scripts/publish.sh",
+    "publish:dry": "bun run build && npm publish --dry-run --workspace @gascity/client && npm publish --dry-run --workspace @gascity/sdk"
   },
   "devDependencies": {
     "@eslint/js": "^9.17.0",

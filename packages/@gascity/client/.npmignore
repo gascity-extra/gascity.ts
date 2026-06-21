@@ -1,0 +1,25 @@
+# Source files
+src/
+scripts/
+tests/
+
+# Test files
+*.spec.ts
+*.test.ts
+*.spec.tsx
+*.test.tsx
+
+# Configuration files
+tsconfig.json
+tsdown.config.ts
+vitest.config.ts
+playwright.config.ts
+biome.json
+oxlint.config.ts
+
+# Development files
+*.map
+*.tsbuildinfo
+
+# Documentation (included in package, but not in published files)
+README.md (will be included, this is just for reference)
