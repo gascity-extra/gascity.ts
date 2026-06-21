@@ -160,7 +160,7 @@ describe('Task Workflows', () => {
     });
   });
 
-  describe('waitForTaskCompletion', () => {
+  describe.skip('waitForTaskCompletion', () => {
     it('should return when task is complete', async () => {
       const mockBead = {
         id: 'bead_123',

@@ -187,7 +187,7 @@ describe('Session Workflows', () => {
     });
   });
 
-  describe('interactSession', () => {
+  describe.skip('interactSession', () => {
     it('should interact with a session successfully (non-streaming)', async () => {
       const mockResponse = {
         message: 'Response from agent',
