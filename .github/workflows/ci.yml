@@ -6,19 +6,24 @@ on:
   pull_request:
     branches: [main, develop]
 
+permissions:
+  contents: read
+
 jobs:
   test:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: oven-sh/setup-bun@v1
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          persist-credentials: false
+      - uses: oven-sh/setup-bun@f4d14e03ff726c06358e5557344e1da148b56cf7 # v1
         with:
           bun-version: latest
       - name: Get bun cache directory
         id: bun-cache
         run: echo "dir=$(bun pm cache dir)" >> $GITHUB_OUTPUT
       - name: Cache bun dependencies
-        uses: actions/cache@v4
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         with:
           path: ${{ steps.bun-cache.outputs.dir }}
           key: ${{ runner.os }}-bun-${{ hashFiles('**/bun.lock') }}
@@ -35,15 +40,17 @@ jobs:
     runs-on: ubuntu-latest
     needs: test
     steps:
-      - uses: actions/checkout@v4
-      - uses: oven-sh/setup-bun@v1
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          persist-credentials: false
+      - uses: oven-sh/setup-bun@f4d14e03ff726c06358e5557344e1da148b56cf7 # v1
         with:
           bun-version: latest
       - name: Get bun cache directory
         id: bun-cache
         run: echo "dir=$(bun pm cache dir)" >> $GITHUB_OUTPUT
       - name: Cache bun dependencies
-        uses: actions/cache@v4
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         with:
           path: ${{ steps.bun-cache.outputs.dir }}
           key: ${{ runner.os }}-bun-${{ hashFiles('**/bun.lock') }}
@@ -61,17 +68,19 @@ jobs:
   e2e:
     runs-on: ubuntu-latest
     needs: build
-    if: false # Temporarily disabled to unblock CI
+    if: ${{ vars.ENABLE_E2E == 'true' }} # temporary gate; remove once suite is stable
     steps:
-      - uses: actions/checkout@v4
-      - uses: oven-sh/setup-bun@v1
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          persist-credentials: false
+      - uses: oven-sh/setup-bun@f4d14e03ff726c06358e5557344e1da148b56cf7 # v1
         with:
           bun-version: latest
       - name: Get bun cache directory
         id: bun-cache
         run: echo "dir=$(bun pm cache dir)" >> $GITHUB_OUTPUT
       - name: Cache bun dependencies
-        uses: actions/cache@v4
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         with:
           path: ${{ steps.bun-cache.outputs.dir }}
           key: ${{ runner.os }}-bun-${{ hashFiles('**/bun.lock') }}
