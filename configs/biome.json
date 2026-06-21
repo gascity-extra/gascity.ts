@@ -6,7 +6,7 @@
     "useIgnoreFile": true
   },
   "files": {
-    "include": ["packages/*/src/**/*"],
+    "include": ["packages/@gascity/*/src/**/*"],
     "ignore": ["node_modules", "dist", ".nx", "coverage"]
   },
   "formatter": {

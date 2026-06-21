@@ -5,7 +5,7 @@
   "description": "TypeScript SDK and Console for Gas City - AI agent orchestration platform",
   "type": "module",
   "workspaces": [
-    "packages/*",
+    "packages/@gascity/*",
     "apps/*"
   ],
   "scripts": {

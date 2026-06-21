@@ -15,15 +15,15 @@
     "build": {
       "cache": true,
       "dependsOn": ["^build"],
-      "inputs": ["production", "^production"]
+      "inputs": ["production", "^production", "{workspaceRoot}/configs/**"]
     },
     "test": {
       "cache": true,
-      "inputs": ["default", "^production", "{workspaceRoot}/vitest.workspace.ts"]
+      "inputs": ["default", "^production", "{workspaceRoot}/vitest.workspace.ts", "{workspaceRoot}/configs/**"]
     },
     "lint": {
       "cache": true,
-      "inputs": ["default", "{workspaceRoot}/biome.json"]
+      "inputs": ["default", "{workspaceRoot}/biome.json", "{workspaceRoot}/configs/**"]
     }
   },
   "plugins": [],

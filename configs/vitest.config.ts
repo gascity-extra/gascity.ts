@@ -3,13 +3,13 @@ import path from 'node:path';
 
 const config = defineConfig({
   test: {
-    include: ['packages/*/src/**/*.test.ts'],
+    include: ['packages/@gascity/*/src/**/*.test.ts'],
     exclude: ['**/node_modules/**', '**/dist/**'],
     environment: 'node',
     coverage: {
       provider: 'v8',
       reporter: ['text', 'json', 'html'],
-      include: ['packages/*/src/**/*.ts'],
+      include: ['packages/@gascity/*/src/**/*.ts'],
     },
   },
   workspace: './vitest.workspace.ts',
