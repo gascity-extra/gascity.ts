@@ -35,9 +35,9 @@ echo "Homebrew installed successfully!"
 # Convert JSON array to space-separated list first
 PACKAGES_LIST=$(echo "$PACKAGES" | sed 's/\[//g' | sed 's/\]//g' | sed 's/,/ /g' | tr -d '"' | xargs)
 
-if [ -n "$PACKAGES_LIST" ]; then
+if [[ -n "$PACKAGES_LIST" ]]; then
     echo "Installing packages: $PACKAGES_LIST"
-    if [ "$(id -u)" = "0" ]; then
+    if [[ "$(id -u)" = "0" ]]; then
         sudo -u vscode /home/linuxbrew/.linuxbrew/bin/brew install $PACKAGES_LIST || sudo -u vscode /home/linuxbrew/.linuxbrew/bin/brew upgrade $PACKAGES_LIST
     else
         brew install $PACKAGES_LIST || brew upgrade $PACKAGES_LIST
@@ -59,7 +59,7 @@ if [ -n "$PACKAGES_LIST" ]; then
         for binary_path in "${BINARY_LOCATIONS[@]}"; do
             # Expand glob patterns
             for expanded_path in $binary_path; do
-                if [ -f "$expanded_path" ] && [ ! -f "/usr/local/bin/$package_name" ]; then
+                if [[ -f "$expanded_path" ]] && [[ ! -f "/usr/local/bin/$package_name" ]]; then
                     echo "Creating symlink for $package_name in /usr/local/bin..."
                     ln -sf "$expanded_path" "/usr/local/bin/$package_name"
                     break 2  # Break both loops once symlink is created

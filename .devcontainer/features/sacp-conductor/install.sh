@@ -17,13 +17,13 @@ if ! command -v rustup &> /dev/null; then
 fi
 
 # Source cargo env if it exists
-if [ -f "$HOME/.cargo/env" ]; then
+if [[ -f "$HOME/.cargo/env" ]]; then
     source "$HOME/.cargo/env"
 fi
 
 # Ensure cargo is in PATH
 if ! command -v cargo &> /dev/null; then
-    echo "Error: cargo not found in PATH after Rust installation"
+    echo "Error: cargo not found in PATH after Rust installation" >&2
     exit 1
 fi
 
@@ -32,7 +32,7 @@ echo "Installing sacp-conductor via cargo..."
 cargo install sacp-conductor
 
 # Copy sacp-conductor binary to avoid permission issues
-if [ -f "$HOME/.cargo/bin/sacp-conductor" ]; then
+if [[ -f "$HOME/.cargo/bin/sacp-conductor" ]]; then
     cp "$HOME/.cargo/bin/sacp-conductor" /usr/local/bin/sacp-conductor
     chmod +x /usr/local/bin/sacp-conductor
     echo "sacp-conductor copied to /usr/local/bin/sacp-conductor"

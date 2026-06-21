@@ -40,7 +40,7 @@ echo "📸 Taking screenshots..."
 bunx playwright test documentation.spec.ts --config=playwright.config.ts
 
 # Check if screenshots were generated
-if [ -d "screenshots" ] && [ "$(ls -A screenshots)" ]; then
+if [[ -d "screenshots" ]] && [[ "$(ls -A screenshots)" ]]; then
   echo "✅ Screenshots generated successfully"
   echo "📁 Screenshots location: docs/screenshots/"
   ls -lh screenshots/
@@ -49,7 +49,7 @@ else
 fi
 
 # Kill the background server if we started it
-if [ ! -z "$CONSOLE_PID" ]; then
+if [[ ! -z "$CONSOLE_PID" ]]; then
   echo "🛑 Stopping console server..."
   kill $CONSOLE_PID
 fi
