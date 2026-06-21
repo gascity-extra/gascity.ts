@@ -23,6 +23,7 @@ This project provides a comprehensive TypeScript SDK and Console UI for interact
 ## Documentation
 
 - [Full Documentation](https://docs.gascity.com)
+- [Interactive Guide](./docs/guide.md) - Hands-on examples with screenshots
 - [API Reference](./packages/@gascity/client/README.md)
 - [SDK Guide](./packages/@gascity/sdk/README.md)
 - [Console Guide](./packages/@gascity/console/README.md)
@@ -72,6 +73,7 @@ bun run build        # Build all packages
 bun run test         # Run tests
 bun run lint         # Run linters
 bun run format       # Format code
+bun run screenshots  # Generate documentation screenshots
 ```
 
 ## Project Structure

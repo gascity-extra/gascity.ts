@@ -15,7 +15,8 @@
     "lint": "nx run-many -t lint",
     "format": "biome check --write .",
     "typecheck": "nx run-many -t typecheck",
-    "prepare": "husky"
+    "prepare": "husky",
+    "screenshots": "bash docs/screenshots/generate.sh"
   },
   "devDependencies": {
     "@eslint/js": "^9.17.0",
