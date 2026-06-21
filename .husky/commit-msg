@@ -1,0 +1,14 @@
+# Conventional commits pattern: type(scope): description
+# Types: feat, fix, docs, style, refactor, test, chore, perf, ci, build, revert
+PATTERN="^(feat|fix|docs|style|refactor|test|chore|perf|ci|build|revert)(\(.+\))?: .{1,}"
+
+if ! grep -qE "$PATTERN" "$1"; then
+  echo "❌ Invalid commit message format."
+  echo "📝 Conventional commits format required:"
+  echo "   type(scope): description"
+  echo ""
+  echo "   Types: feat, fix, docs, style, refactor, test, chore, perf, ci, build, revert"
+  echo "   Example: feat(auth): add login functionality"
+  echo "   Example: fix: resolve memory leak"
+  exit 1
+fi

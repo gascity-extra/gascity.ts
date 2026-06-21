@@ -1,0 +1,35 @@
+{
+  "name": "gascity.ts",
+  "image": "mcr.microsoft.com/devcontainers/base:ubuntu",
+  "forwardPorts": [8080, 8372],
+  "features": {
+    "ghcr.io/devcontainers/features/common-utils:2": {
+      "installZsh": true,
+      "installOhMyZsh": true,
+      "upgradePackages": true
+    },
+    "./features/gascity": {
+      "autoRegister": true
+    },
+    "./features/devin": {
+      "version": "latest"
+    },
+    "./features/cursor": {
+      "version": "latest"
+    },
+    "./features/sacp-conductor": {}
+  },
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "github.copilot",
+        "ms-vscode.vscode-typescript-next"
+      ]
+    }
+  },
+  "containerEnv": {
+    "TERM": "xterm-256color"
+  },
+  "remoteUser": "vscode",
+  "runArgs": ["--tty"]
+}

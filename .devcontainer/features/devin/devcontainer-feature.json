@@ -1,0 +1,21 @@
+{
+  "id": "devin-cli",
+  "version": "1.0.0",
+  "name": "Devin CLI",
+  "description": "Install Devin CLI for AI-powered development",
+  "documentationURL": "https://devin.ai",
+  "license": "MIT",
+  "keywords": [
+    "ai",
+    "devin",
+    "development",
+    "cli"
+  ],
+  "options": {
+    "version": {
+      "type": "string",
+      "default": "latest",
+      "description": "Devin CLI version to install"
+    }
+  }
+}

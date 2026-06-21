@@ -1,0 +1,21 @@
+{
+  "id": "cursor-cli",
+  "version": "1.0.0",
+  "name": "Cursor CLI",
+  "description": "Install Cursor CLI for AI-powered development",
+  "documentationURL": "https://cursor.sh",
+  "license": "MIT",
+  "keywords": [
+    "ai",
+    "cursor",
+    "development",
+    "cli"
+  ],
+  "options": {
+    "version": {
+      "type": "string",
+      "default": "latest",
+      "description": "Cursor CLI version to install"
+    }
+  }
+}

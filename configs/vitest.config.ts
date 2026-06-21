@@ -1,0 +1,16 @@
+import { defineConfig } from 'vitest/config';
+import path from 'node:path';
+
+export default defineConfig({
+  test: {
+    include: ['packages/*/src/**/*.test.ts'],
+    exclude: ['**/node_modules/**', '**/dist/**'],
+    environment: 'node',
+    coverage: {
+      provider: 'v8',
+      reporter: ['text', 'json', 'html'],
+      include: ['packages/*/src/**/*.ts'],
+    },
+  },
+  workspace: './vitest.workspace.ts',
+});

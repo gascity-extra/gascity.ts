@@ -1,0 +1,28 @@
+{
+  "$schema": "https://biomejs.dev/schemas/configuration.html",
+  "vcs": {
+    "enabled": true,
+    "clientKind": "git",
+    "useIgnoreFile": true
+  },
+  "files": {
+    "include": ["packages/*/src/**/*"],
+    "ignore": ["node_modules", "dist", ".nx", "coverage"]
+  },
+  "formatter": {
+    "indentStyle": "space",
+    "indentWidth": 2,
+    "lineWidth": 100
+  },
+  "linter": {
+    "rules": {
+      "style": {
+        "useConst": "error",
+        "noVar": "error"
+      }
+    }
+  },
+  "organizeImports": {
+    "enabled": true
+  }
+}

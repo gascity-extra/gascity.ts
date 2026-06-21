@@ -1,0 +1,6 @@
+{
+  "extends": "./configs/biome.json",
+  "files": {
+    "include": ["packages/**/*", "apps/**/*", "configs/**/*", "scripts/**/*"]
+  }
+}
