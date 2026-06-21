@@ -1,0 +1,8 @@
+{
+  "$schema": "https://biomejs.dev/schemas/configuration.html",
+  "extends": "../../configs/biome.json",
+  "files": {
+    "include": ["src/**/*"],
+    "ignore": ["node_modules", "dist", "e2e"]
+  }
+}
