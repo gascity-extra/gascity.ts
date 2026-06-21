@@ -1,7 +1,7 @@
 import { defineConfig } from 'vitest/config';
 import path from 'node:path';
 
-export default defineConfig({
+const config = defineConfig({
   test: {
     include: ['packages/*/src/**/*.test.ts'],
     exclude: ['**/node_modules/**', '**/dist/**'],
@@ -14,3 +14,6 @@ export default defineConfig({
   },
   workspace: './vitest.workspace.ts',
 });
+
+export default config;
+export { config };

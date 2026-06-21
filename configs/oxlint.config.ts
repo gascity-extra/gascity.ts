@@ -1,6 +1,6 @@
 import { defineConfig } from 'oxlint';
 
-export default defineConfig({
+const config = defineConfig({
   root: true,
   workspace: true,
   rules: {
@@ -10,3 +10,6 @@ export default defineConfig({
     'no-var': 'error',
   },
 });
+
+export default config;
+export { config };
