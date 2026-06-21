@@ -17,22 +17,22 @@ export async function withRetry<T>(
   const maxDelay = options.maxDelay || 30000;
   const backoffMultiplier = options.backoffMultiplier || 2;
   
-  let lastError: Error;
-  
+  let lastError: Error | undefined;
+
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     try {
       return await fn();
     } catch (error) {
       lastError = error as Error;
-      
+
       if (attempt === maxAttempts) {
         break;
       }
-      
+
       const delay = Math.min(initialDelay * Math.pow(backoffMultiplier, attempt - 1), maxDelay);
       await new Promise(resolve => setTimeout(resolve, delay));
     }
   }
-  
-  throw lastError;
+
+  throw lastError ?? new Error('Retry failed with no error captured');
 }

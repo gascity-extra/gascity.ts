@@ -4,11 +4,13 @@ export interface CityConfig {
   dir: string;
   provider?: string;
   bootstrapProfile?: CityCreateRequest.bootstrap_profile;
+  csrfToken?: string; // Anti-CSRF token for API requests
 }
 
 export interface CityInitOptions {
   waitForReady?: boolean;
   timeout?: number;
+  csrfToken?: string; // Override CSRF token for this operation
 }
 
 /**
@@ -96,10 +98,9 @@ export async function initCity(
   options: CityInitOptions = {}
 ): Promise<CityInfo> {
   return withRetry(async () => {
-    // Note: xGcRequest is an Anti-CSRF header - in a real implementation,
-    // this should be passed as a parameter or obtained from a session
-    const xGcRequest = 'sdk-request'; // Placeholder
-    
+    // Use CSRF token from options, config, or undefined (will use default from client)
+    const xGcRequest = options.csrfToken ?? config.csrfToken;
+
     const response = await DefaultService.postV0City(
       xGcRequest,
       {
@@ -217,10 +218,9 @@ export async function registerCity(cityName: string): Promise<void> {
  * await unregisterCity('my-city');
  * ```
  */
-export async function unregisterCity(cityName: string): Promise<void> {
+export async function unregisterCity(cityName: string, csrfToken?: string): Promise<void> {
   return withRetry(async () => {
-    const xGcRequest = 'sdk-request'; // Placeholder
-    await DefaultService.postV0CityByCityNameUnregister(xGcRequest, cityName);
+    await DefaultService.postV0CityByCityNameUnregister(csrfToken, cityName);
   }, DEFAULT_RETRY_CONFIG, 'City unregistration');
 }
 

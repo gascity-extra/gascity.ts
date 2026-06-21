@@ -61,7 +61,7 @@ async function withRetry<T>(
       return await operation();
     } catch (error) {
       lastError = error;
-      
+
       if (attempt === config.maxAttempts) {
         throw new TaskError(
           `${operationName} failed after ${config.maxAttempts} attempts`,
@@ -76,7 +76,7 @@ async function withRetry<T>(
 
   throw new TaskError(
     `${operationName} failed unexpectedly`,
-    lastError
+    lastError ?? new Error('No error captured')
   );
 }
 

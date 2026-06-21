@@ -5,11 +5,13 @@ export interface SessionConfig {
   agent: string;
   city?: string;
   scope?: string;
+  csrfToken?: string; // Anti-CSRF token for API requests
 }
 
 export interface SessionInteractOptions {
   city?: string;
   stream?: boolean;
+  csrfToken?: string; // Override CSRF token for this operation
 }
 
 export interface SessionStreamOptions {
@@ -73,7 +75,7 @@ async function withRetry<T>(
 
   throw new SessionError(
     `${operationName} failed unexpectedly`,
-    lastError
+    lastError ?? new Error('No error captured')
   );
 }
 
@@ -186,7 +188,7 @@ export class SessionStream extends EventEmitter {
  */
 export async function createSession(config: SessionConfig): Promise<any> {
   const cityName = config.city || 'default';
-  const xGcRequest = 'sdk-request'; // Anti-CSRF header
+  const xGcRequest = config.csrfToken;
 
   const response = await withRetry(async () => {
     return await DefaultService.createSession(
@@ -241,7 +243,7 @@ export async function interactSession(
   options: SessionInteractOptions = {}
 ): Promise<any> {
   const cityName = options.city || 'default';
-  const xGcRequest = 'sdk-request'; // Anti-CSRF header
+  const xGcRequest = options.csrfToken;
 
   if (options.stream) {
     // For streaming, we create a SessionStream
@@ -377,9 +379,9 @@ export async function streamSession(
  * console.log('Session reset successfully');
  * ```
  */
-export async function resetSession(sessionId: string, city?: string): Promise<void> {
+export async function resetSession(sessionId: string, city?: string, csrfToken?: string): Promise<void> {
   const cityName = city || 'default';
-  const xGcRequest = 'sdk-request'; // Anti-CSRF header
+  const xGcRequest = csrfToken;
 
   await withRetry(async () => {
     const response = await DefaultService.postV0CityByCityNameSessionByIdClose(
@@ -444,9 +446,9 @@ export async function getSessionTranscript(sessionId: string, city?: string): Pr
  * console.log('Session closed successfully');
  * ```
  */
-export async function closeSession(sessionId: string, city?: string): Promise<void> {
+export async function closeSession(sessionId: string, city?: string, csrfToken?: string): Promise<void> {
   const cityName = city || 'default';
-  const xGcRequest = 'sdk-request'; // Anti-CSRF header
+  const xGcRequest = csrfToken;
 
   await withRetry(async () => {
     const response = await DefaultService.postV0CityByCityNameSessionByIdClose(

@@ -7,6 +7,7 @@ export interface AgentConfig {
   city?: string;
   dir?: string;
   scope?: string;
+  csrfToken?: string; // Anti-CSRF token for API requests
 }
 
 export interface AgentReference {
@@ -190,7 +191,7 @@ export class AgentStream extends EventEmitter {
  */
 export async function createAgent(config: AgentConfig): Promise<any> {
   const cityName = config.city || 'default';
-  const xGcRequest = 'sdk-request'; // Anti-CSRF header
+  const xGcRequest = config.csrfToken;
 
   const response = await withRetry(async () => {
     return await DefaultService.createAgent(
@@ -241,10 +242,11 @@ export async function createAgent(config: AgentConfig): Promise<any> {
 export async function configureAgent(
   agentRef: AgentReference,
   config: Partial<AgentConfig>,
-  city?: string
+  city?: string,
+  csrfToken?: string
 ): Promise<void> {
   const cityName = city || 'default';
-  const xGcRequest = 'sdk-request'; // Anti-CSRF header
+  const xGcRequest = csrfToken;
 
   await withRetry(async () => {
     let response;
@@ -443,9 +445,9 @@ export async function streamAgentOutput(
  * await deleteAgent({ base: 'research-agent', dir: '/agents/research' }, 'production');
  * ```
  */
-export async function deleteAgent(agentRef: AgentReference, city?: string): Promise<void> {
+export async function deleteAgent(agentRef: AgentReference, city?: string, csrfToken?: string): Promise<void> {
   const cityName = city || 'default';
-  const xGcRequest = 'sdk-request'; // Anti-CSRF header
+  const xGcRequest = csrfToken;
 
   await withRetry(async () => {
     let response;
