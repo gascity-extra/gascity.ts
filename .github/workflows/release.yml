@@ -1,10 +1,19 @@
 name: Release
 
 on:
-  push:
-    branches:
-      - main
   workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Dry run mode (no actual publishing)'
+        required: false
+        default: 'true'
+        type: choice
+        options:
+          - 'true'
+          - 'false'
+  push:
+    tags:
+      - 'v*'
 
 permissions:
   contents: write
@@ -59,7 +68,13 @@ jobs:
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
 
-      - name: Release (dry-run for now)
-        run: bunx nx release --dry-run --verbose
+      - name: Release
+        run: |
+          if [ "${{ inputs.dry_run }}" = "false" ]; then
+            bunx nx release --verbose
+          else
+            bunx nx release --dry-run --verbose
+          fi
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
