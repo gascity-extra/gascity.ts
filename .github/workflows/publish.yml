@@ -44,5 +44,8 @@ jobs:
       - name: Publish @gascity/client
         run: cd packages/@gascity/client && npm publish --access public
 
+      - name: Update SDK dependency
+        run: cd packages/@gascity/sdk && npm pkg set dependencies.@gascity/client@1.0.0
+
       - name: Publish @gascity/sdk
         run: cd packages/@gascity/sdk && npm publish --access public
