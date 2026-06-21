@@ -51,17 +51,15 @@ The Gas City Console provides a modern interface for managing all your Gas City 
 
 ### Homepage
 
-![Homepage](./screenshots/homepage.png)
-
 The homepage gives you quick access to all major features:
 - **Cities** - Manage your Gas City instances
 - **Agents** - View and configure AI agents
 - **Tasks** - Track task progress and results
 - **Sessions** - Interactive agent conversations
 
-### City Management
+Navigate to the homepage by opening the console URL in your browser.
 
-![Cities Page](./screenshots/cities.png)
+### City Management
 
 Manage your Gas City instances with the Cities page:
 - View all configured cities
@@ -69,9 +67,9 @@ Manage your Gas City instances with the Cities page:
 - Monitor city status
 - Access city settings
 
-### Agent Management
+Access the Cities page from the main navigation menu.
 
-![Agents Page](./screenshots/agents.png)
+### Agent Management
 
 The Agents page provides:
 - List of all available agents
@@ -79,9 +77,9 @@ The Agents page provides:
 - Performance metrics
 - Agent deployment status
 
-### Task Tracking
+Navigate to Agents from the sidebar or main menu.
 
-![Tasks Page](./screenshots/tasks.png)
+### Task Tracking
 
 Track your tasks with the Tasks page:
 - View all active and completed tasks
@@ -89,9 +87,9 @@ Track your tasks with the Tasks page:
 - Access task results and outputs
 - Filter and search tasks
 
-### Session Management
+Click on "Tasks" in the navigation to view your task history.
 
-![Sessions Page](./screenshots/sessions.png)
+### Session Management
 
 Manage interactive sessions:
 - Start new conversations with agents
@@ -99,11 +97,14 @@ Manage interactive sessions:
 - Monitor active sessions
 - Access session transcripts
 
+Find the Sessions section in the main navigation area.
+
 ### Navigation
 
-![Navigation Menu](./screenshots/navigation.png)
-
-Quick navigation menu for easy access to all features.
+Quick navigation menu for easy access to all features:
+- Use the sidebar for quick access to common sections
+- The top navigation bar contains global actions
+- Breadcrumbs help you track your current location
 
 ## SDK Examples
 
