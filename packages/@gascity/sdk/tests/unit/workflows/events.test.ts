@@ -39,7 +39,7 @@ class MockEventSource {
 }
 
 // Mock global EventSource
-global.EventSource = MockEventSource as any;
+globalThis.EventSource = MockEventSource as any;
 
 describe('Event Workflows', () => {
   let manager: GasCityEventManager;

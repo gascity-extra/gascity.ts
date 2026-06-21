@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, vi, afterEach } from 'vitest';
 import { createEventSourceStream } from '../../../src/helpers/streaming';
 
 // Mock EventSource
@@ -60,7 +60,7 @@ describe.skip('Streaming Helper', () => {
 
       // Get the EventSource instance (it's created in the stream start)
       await new Promise(resolve => setTimeout(resolve, 10));
-      const eventSource = (global as any).eventSourceInstances?.[0] as MockEventSource;
+      const eventSource = (globalThis as any).eventSourceInstances?.[0] as MockEventSource;
 
       if (eventSource) {
         eventSource.simulateMessage('test data 1');
@@ -93,7 +93,7 @@ describe.skip('Streaming Helper', () => {
       })();
 
       await new Promise(resolve => setTimeout(resolve, 10));
-      const eventSource = (global as any).eventSourceInstances?.[0] as MockEventSource;
+      const eventSource = (globalThis as any).eventSourceInstances?.[0] as MockEventSource;
 
       if (eventSource) {
         eventSource.simulateMessage('test data');
@@ -114,7 +114,7 @@ describe.skip('Streaming Helper', () => {
       const reader = stream.getReader();
 
       await new Promise(resolve => setTimeout(resolve, 10));
-      const eventSource = (global as any).eventSourceInstances?.[0] as MockEventSource;
+      const eventSource = (globalThis as any).eventSourceInstances?.[0] as MockEventSource;
 
       // Cancel the stream
       reader.cancel();
@@ -132,7 +132,7 @@ describe.skip('Streaming Helper', () => {
       const reader = stream.getReader();
 
       await new Promise(resolve => setTimeout(resolve, 10));
-      const eventSource = (global as any).eventSourceInstances?.[0] as MockEventSource;
+      const eventSource = (globalThis as any).eventSourceInstances?.[0] as MockEventSource;
 
       if (eventSource) {
         eventSource.simulateError(new Event('error'));
@@ -150,7 +150,7 @@ describe.skip('Streaming Helper', () => {
       const reader = stream.getReader();
 
       await new Promise(resolve => setTimeout(resolve, 10));
-      const eventSource = (global as any).eventSourceInstances?.[0] as MockEventSource;
+      const eventSource = (globalThis as any).eventSourceInstances?.[0] as MockEventSource;
 
       if (eventSource) {
         eventSource.simulateError(new Event('error'));
@@ -178,7 +178,7 @@ describe.skip('Streaming Helper', () => {
       })();
 
       await new Promise(resolve => setTimeout(resolve, 10));
-      const eventSource = (global as any).eventSourceInstances?.[0] as MockEventSource;
+      const eventSource = (globalThis as any).eventSourceInstances?.[0] as MockEventSource;
 
       if (eventSource) {
         for (let i = 0; i < 5; i++) {
@@ -209,7 +209,7 @@ describe.skip('Streaming Helper', () => {
       })();
 
       await new Promise(resolve => setTimeout(resolve, 10));
-      const eventSource = (global as any).eventSourceInstances?.[0] as MockEventSource;
+      const eventSource = (globalThis as any).eventSourceInstances?.[0] as MockEventSource;
 
       if (eventSource) {
         eventSource.simulateMessage('');
@@ -238,7 +238,7 @@ describe.skip('Streaming Helper', () => {
       })();
 
       await new Promise(resolve => setTimeout(resolve, 10));
-      const eventSource = (global as any).eventSourceInstances?.[0] as MockEventSource;
+      const eventSource = (globalThis as any).eventSourceInstances?.[0] as MockEventSource;
 
       if (eventSource) {
         const jsonData = JSON.stringify({ type: 'test', data: 'value' });
