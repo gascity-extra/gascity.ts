@@ -126,7 +126,7 @@ describe('Agent Workflows', () => {
       const result = await createAgent(config);
 
       expect(DefaultService.createAgent).toHaveBeenCalledWith(
-        'sdk-request',
+        undefined,
         'production',
         expect.objectContaining({
           name: 'research-agent',
@@ -149,7 +149,7 @@ describe('Agent Workflows', () => {
       await createAgent(config);
 
       expect(DefaultService.createAgent).toHaveBeenCalledWith(
-        'sdk-request',
+        undefined,
         'default',
         expect.any(Object)
       );
@@ -213,7 +213,7 @@ describe('Agent Workflows', () => {
       await configureAgent(agentRef, config, 'production');
 
       expect(DefaultService.patchV0CityByCityNameAgentByBase).toHaveBeenCalledWith(
-        'sdk-request',
+        undefined,
         'production',
         'research-agent',
         config
@@ -237,7 +237,7 @@ describe('Agent Workflows', () => {
       await configureAgent(agentRef, config, 'production');
 
       expect(DefaultService.patchV0CityByCityNameAgentByDirByBase).toHaveBeenCalledWith(
-        'sdk-request',
+        undefined,
         'production',
         '/agents/research',
         'research-agent',
@@ -259,7 +259,7 @@ describe('Agent Workflows', () => {
       await configureAgent(agentRef, config);
 
       expect(DefaultService.patchV0CityByCityNameAgentByBase).toHaveBeenCalledWith(
-        'sdk-request',
+        undefined,
         'default',
         'research-agent',
         config
@@ -575,7 +575,7 @@ describe('Agent Workflows', () => {
       await deleteAgent(agentRef, 'production');
 
       expect(DefaultService.deleteV0CityByCityNameAgentByBase).toHaveBeenCalledWith(
-        'sdk-request',
+        undefined,
         'production',
         'research-agent'
       );
@@ -594,7 +594,7 @@ describe('Agent Workflows', () => {
       await deleteAgent(agentRef, 'production');
 
       expect(DefaultService.deleteV0CityByCityNameAgentByDirByBase).toHaveBeenCalledWith(
-        'sdk-request',
+        undefined,
         'production',
         '/agents/research',
         'research-agent'
@@ -611,7 +611,7 @@ describe('Agent Workflows', () => {
       await deleteAgent(agentRef);
 
       expect(DefaultService.deleteV0CityByCityNameAgentByBase).toHaveBeenCalledWith(
-        'sdk-request',
+        undefined,
         'default',
         'research-agent'
       );

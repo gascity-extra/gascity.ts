@@ -41,7 +41,7 @@ describe('City Workflows', () => {
       const result = await initCity(config);
 
       expect(DefaultService.postV0City).toHaveBeenCalledWith(
-        'sdk-request',
+        undefined,
         expect.objectContaining({
           dir: '/my-city',
           provider: 'local',
@@ -126,7 +126,7 @@ describe('City Workflows', () => {
       await unregisterCity('my-city');
 
       expect(DefaultService.postV0CityByCityNameUnregister).toHaveBeenCalledWith(
-        'sdk-request',
+        undefined,
         'my-city'
       );
     });

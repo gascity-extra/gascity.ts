@@ -58,7 +58,7 @@ describe('Task Workflows', () => {
       const result = await slingTask(config);
 
       expect(DefaultService.postV0CityByCityNameSling).toHaveBeenCalledWith(
-        'sdk-request',
+        undefined,
         'production',
         expect.objectContaining({
           target: 'research-agent',
@@ -86,7 +86,7 @@ describe('Task Workflows', () => {
       await slingTask(config);
 
       expect(DefaultService.postV0CityByCityNameSling).toHaveBeenCalledWith(
-        'sdk-request',
+        undefined,
         'default',
         expect.any(Object)
       );
@@ -296,7 +296,7 @@ describe('Task Workflows', () => {
       await closeTask('bead_123', 'production');
 
       expect(DefaultService.postV0CityByCityNameBeadByIdClose).toHaveBeenCalledWith(
-        'sdk-request',
+        undefined,
         'production',
         'bead_123'
       );
@@ -340,7 +340,7 @@ describe('Task Workflows', () => {
       await reopenTask('bead_123', 'production');
 
       expect(DefaultService.postV0CityByCityNameBeadByIdReopen).toHaveBeenCalledWith(
-        'sdk-request',
+        undefined,
         'production',
         'bead_123'
       );

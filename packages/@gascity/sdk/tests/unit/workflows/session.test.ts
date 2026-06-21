@@ -120,7 +120,7 @@ describe('Session Workflows', () => {
       const result = await createSession(config);
 
       expect(DefaultService.createSession).toHaveBeenCalledWith(
-        'sdk-request',
+        undefined,
         'production',
         expect.objectContaining({
           name: 'research-agent',
@@ -140,7 +140,7 @@ describe('Session Workflows', () => {
       await createSession(config);
 
       expect(DefaultService.createSession).toHaveBeenCalledWith(
-        'sdk-request',
+        undefined,
         'default',
         expect.any(Object)
       );
@@ -203,7 +203,7 @@ describe('Session Workflows', () => {
       const result = await interactSession('session-123', 'Hello agent', options);
 
       expect(DefaultService.sendSessionMessage).toHaveBeenCalledWith(
-        'sdk-request',
+        undefined,
         'production',
         'session-123',
         { message: 'Hello agent' }
@@ -234,7 +234,7 @@ describe('Session Workflows', () => {
       await interactSession('session-123', 'Hello agent', {});
 
       expect(DefaultService.sendSessionMessage).toHaveBeenCalledWith(
-        'sdk-request',
+        undefined,
         'default',
         'session-123',
         expect.any(Object)
@@ -374,7 +374,7 @@ describe('Session Workflows', () => {
       await resetSession('session-123', 'production');
 
       expect(DefaultService.postV0CityByCityNameSessionByIdClose).toHaveBeenCalledWith(
-        'sdk-request',
+        undefined,
         'production',
         'session-123'
       );
@@ -388,7 +388,7 @@ describe('Session Workflows', () => {
       await resetSession('session-123');
 
       expect(DefaultService.postV0CityByCityNameSessionByIdClose).toHaveBeenCalledWith(
-        'sdk-request',
+        undefined,
         'default',
         'session-123'
       );
@@ -504,7 +504,7 @@ describe('Session Workflows', () => {
       await closeSession('session-123', 'production');
 
       expect(DefaultService.postV0CityByCityNameSessionByIdClose).toHaveBeenCalledWith(
-        'sdk-request',
+        undefined,
         'production',
         'session-123'
       );
@@ -518,7 +518,7 @@ describe('Session Workflows', () => {
       await closeSession('session-123');
 
       expect(DefaultService.postV0CityByCityNameSessionByIdClose).toHaveBeenCalledWith(
-        'sdk-request',
+        undefined,
         'default',
         'session-123'
       );
