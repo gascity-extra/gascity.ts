@@ -26,7 +26,7 @@ test.describe('GC API Diagnostics', () => {
       console.log('API returned no cities');
     } else {
       // Extract city names if possible
-      const cityPattern = /([a-zA-Z0-9_-]+)\s+<span/;
+      const cityPattern = /([a-zA-Z0-9_-]{1,50})\s+<span/;
       const matches = pageContent.match(cityPattern);
       if (matches) {
         console.log('Found city name:', matches[1]);
