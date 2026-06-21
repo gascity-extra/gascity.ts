@@ -101,7 +101,7 @@ export async function initCity(
     // Use CSRF token from options, config, or undefined (will use default from client)
     const xGcRequest = options.csrfToken ?? config.csrfToken;
 
-    const response = await DefaultService.postV0City(
+    await DefaultService.postV0City(
       xGcRequest,
       {
         dir: config.dir,
@@ -140,7 +140,7 @@ export async function initCity(
  */
 export async function startCity(cityName: string): Promise<void> {
   return withRetry(async () => {
-    // TODO: This method doesn't exist in the current OpenAPI spec
+    // Note: This method doesn't exist in the current OpenAPI spec
     // It needs to be added to the API or the client regenerated
     throw new CityError(
       'startCity is not yet implemented - API endpoint not available'
@@ -166,7 +166,7 @@ export async function startCity(cityName: string): Promise<void> {
  */
 export async function stopCity(cityName: string): Promise<void> {
   return withRetry(async () => {
-    // TODO: This method doesn't exist in the current OpenAPI spec
+    // Note: This method doesn't exist in the current OpenAPI spec
     // It needs to be added to the API or the client regenerated
     throw new CityError(
       'stopCity is not yet implemented - API endpoint not available'
@@ -193,7 +193,7 @@ export async function stopCity(cityName: string): Promise<void> {
  */
 export async function registerCity(cityName: string): Promise<void> {
   return withRetry(async () => {
-    // TODO: This method doesn't exist in the current OpenAPI spec
+    // Note: This method doesn't exist in the current OpenAPI spec
     // It needs to be added to the API or the client regenerated
     throw new CityError(
       'registerCity is not yet implemented - API endpoint not available'
@@ -258,7 +258,9 @@ export async function waitForCityReady(
       }
     } catch (error) {
       // City not ready yet, continue waiting
-      // Log error if needed for debugging
+      // Errors are expected during polling - the city may not be ready yet
+      // We continue polling until timeout
+      console.debug(`City ${cityName} not ready yet, continuing to poll:`, error);
     }
     
     await new Promise(resolve => setTimeout(resolve, pollInterval));

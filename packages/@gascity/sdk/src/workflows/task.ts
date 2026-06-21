@@ -210,6 +210,7 @@ export async function waitForTaskCompletion(
     } catch (error) {
       // Bead not found yet, continue waiting
       // This is expected during the initial polling phase
+      console.debug(`Bead ${beadId} not found yet, continuing to poll:`, error);
     }
     
     await new Promise(resolve => setTimeout(resolve, pollInterval));
