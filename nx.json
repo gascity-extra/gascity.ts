@@ -40,11 +40,10 @@
       "fallbackCurrentVersionResolver": "disk"
     },
     "changelog": {
-      "workspaceChangelog": true,
+      "workspaceChangelog": false,
       "createRelease": "github",
       "gitTagPattern": "{version}",
-      "gitRemote": "origin",
-      "automaticFromRef": true
+      "gitRemote": "origin"
     },
     "git": {
       "commit": true,
