@@ -12,6 +12,8 @@
  *
  * SECURITY: This route is disabled in production and requires development mode.
  * Input validation is applied to prevent command injection.
+ * Environment variables are not passed to the tmux session to prevent exposure
+ * of sensitive data (e.g., API keys, tokens) to anyone who can attach to the session.
  */
 import { createFileRoute } from "@tanstack/react-router";
 
@@ -124,7 +126,8 @@ export const Route = createFileRoute("/api/pty")({
             cols,
             rows,
             cwd: process.env.HOME,
-            env: process.env as Record<string, string>,
+            // Security: Do not pass process.env to prevent exposure of sensitive
+            // environment variables (API keys, tokens, etc.) to the tmux session
           });
 
           term.onData((chunk: string) => {
