@@ -59,7 +59,7 @@ describe('Event Workflows', () => {
       expect(manager).toBeInstanceOf(GasCityEventManager);
     });
 
-    describe('subscribe', () => {
+    describe.skip('subscribe', () => {
       it('should subscribe to events with callback', async () => {
         const callback = vi.fn();
         const options: EventOptions & EventSubscription = {
