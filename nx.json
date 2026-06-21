@@ -24,6 +24,33 @@
     "lint": {
       "cache": true,
       "inputs": ["default", "{workspaceRoot}/biome.json", "{workspaceRoot}/configs/**"]
+    },
+    "release": {
+      "dependsOn": ["build"]
+    }
+  },
+  "release": {
+    "projects": [
+      "@gascity/client",
+      "@gascity/sdk"
+    ],
+    "projectsRelationship": "independent",
+    "version": {
+      "conventionalCommits": true
+    },
+    "changelog": {
+      "workspaceChangelog": true,
+      "createRelease": "github",
+      "gitTagPattern": "{version}",
+      "gitRemote": "origin"
+    },
+    "git": {
+      "commit": true,
+      "tag": true
+    },
+    "npm": {
+      "publish": true,
+      "packageManager": "npm"
     }
   },
   "plugins": [],

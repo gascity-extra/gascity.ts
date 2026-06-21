@@ -1,248 +1,178 @@
 # Publishing to npm
 
-This guide explains how to publish the gascity.ts packages to npm.
+This project uses **Nx Release** for automated versioning and publishing based on conventional commits.
 
-## Prerequisites
+## Overview
 
-1. **npm account**: You need an npm account with permission to publish to the `@gascity` scope
-2. **npm token**: Create an automation token from npmjs.com
-3. **Environment variable**: Set your npm token as an environment variable
+- **Automated Versioning**: Versions are determined automatically based on conventional commits
+- **Independent Releases**: Each package (@gascity/client, @gascity/sdk) is versioned independently
+- **CI/CD Integration**: Releases are triggered automatically on push to main branch
+- **GitHub Trust**: Uses npm trust for GitHub Actions (no tokens in CI)
 
-## Setup
+## How It Works
 
-### 1. Create npm token
+### Conventional Commits
 
-1. Go to [npmjs.com](https://www.npmjs.com/)
-2. Log in to your account
-3. Go to Access Tokens → Create New Token
-4. Select "Automation" token type
-5. Copy the token
+Versions are determined by commit messages:
 
-### 2. Set environment variable
+- `feat:` - Minor version bump (1.0.0 → 1.1.0)
+- `fix:` - Patch version bump (1.0.0 → 1.0.1)
+- `feat!:` or `BREAKING CHANGE:` - Major version bump (1.0.0 → 2.0.0)
+
+### Release Process
+
+1. **Push to main**: Any push to main triggers the release workflow
+2. **Version Detection**: Nx analyzes commits since last release
+3. **Version Bump**: Automatically bumps versions for affected packages
+4. **Changelog**: Generates changelog entries
+5. **Git Tag**: Creates git tags for new versions
+6. **Publish**: Publishes to npm using GitHub Actions trust
+
+### Independent Releases
+
+Each package is versioned independently:
+
+- Changes to `@gascity/client` only bump client version
+- Changes to `@gascity/sdk` bump SDK version (and client if dependency changes)
+- Console package is private and not published
+
+## Local Development
+
+### Preview Release Changes
 
 ```bash
-# Linux/Mac
-export NPM_TOKEN=your_npm_token_here
+# Preview what would be released
+bun run release:dry
 
-# Windows (PowerShell)
-$env:NPM_TOKEN="your_npm_token_here"
+# Preview version changes
+bun run release:version --dry-run
 
-# Windows (Command Prompt)
-set NPM_TOKEN=your_npm_token_here
+# Preview changelog
+bun run release:changelog --dry-run
 ```
 
-### 3. Verify npm authentication
+### Manual Release (for testing)
 
 ```bash
-npm whoami
+# Create a version
+bun run release:version patch
+
+# Generate changelog
+bun run release:changelog
+
+# Publish (requires npm auth)
+bun run release:publish
 ```
 
-## Package Information
+## CI/CD Workflow
 
-### Published Packages
+The `.github/workflows/release.yml` workflow:
 
-- **@gascity/client** - Type-safe API client
-- **@gascity/sdk** - High-level SDK workflows
+1. Runs on every push to `main`
+2. Builds all packages
+3. Runs `nx release` which:
+   - Analyzes commits
+   - Bumps versions
+   - Generates changelogs
+   - Creates git commits and tags
+   - Publishes to npm
 
-### Not Published
+## Setup Requirements
 
-- **@gascity/console** - Console UI (marked as private, not intended for npm)
+### npm Trust (Already Configured)
 
-## Publishing Process
+GitHub Actions trust is already configured for:
+- `@gascity/client`
+- `@gascity/sdk`
 
-### Option 1: Using the publish script
+No npm tokens needed in GitHub Secrets!
 
-```bash
-# Set your npm token
-export NPM_TOKEN=your_npm_token
+### GitHub Token
 
-# Publish all packages
-bun run publish
+The workflow uses `GITHUB_TOKEN` automatically provided by GitHub Actions.
+
+## Configuration
+
+### nx.json
+
+```json
+{
+  "release": {
+    "projects": ["@gascity/client", "@gascity/sdk"],
+    "projectsRelationship": "independent",
+    "version": {
+      "conventionalCommits": true
+    },
+    "changelog": {
+      "workspaceChangelog": true,
+      "createRelease": "github",
+      "gitTagPattern": "{version}",
+      "gitRemote": "origin"
+    },
+    "git": {
+      "commit": true,
+      "tag": true
+    },
+    "npm": {
+      "publish": true
+    }
+  }
+}
 ```
 
-### Option 2: Manual publishing
+## Example Workflow
+
+### Feature Release
 
 ```bash
-# Build packages
-bun run build
-
-# Publish client package
-cd packages/@gascity/client
-npm publish --access public
-
-# Publish SDK package
-cd packages/@gascity/sdk
-npm publish --access public
-```
-
-### Dry Run
-
-Test the publishing process without actually publishing:
-
-```bash
-bun run publish:dry
-```
-
-## Version Management
-
-### Update version
-
-```bash
-# Update version in package.json files
-# Update version in root package.json
-
-# Commit changes
+# Make changes
 git add .
-git commit -m "chore: bump version to 1.0.1"
+git commit -m "feat(client): add streaming support"
 
-# Create git tag
-git tag v1.0.1
-
-# Push to GitHub
+# Push to main
 git push origin main
-git push origin v1.0.1
 
-# Publish to npm
-bun run publish
+# CI automatically:
+# 1. Bumps @gascity/client to 1.1.0
+# 2. Generates changelog
+# 3. Creates git tag @gascity/client@1.1.0
+# 4. Publishes to npm
 ```
 
-### Semantic Versioning
-
-Follow [Semantic Versioning](https://semver.org/):
-
-- **MAJOR**: Breaking changes (2.0.0)
-- **MINOR**: New features, backward compatible (1.1.0)
-- **PATCH**: Bug fixes, backward compatible (1.0.1)
-
-## Pre-release Publishing
-
-For alpha, beta, or rc versions:
+### Bug Fix Release
 
 ```bash
-# Update version to pre-release
-npm version 1.0.1-beta.0
+# Fix bug
+git add .
+git commit -m "fix(sdk): handle connection timeout"
 
-# Publish with tag
-npm publish --tag beta
+# Push to main
+git push origin main
+
+# CI automatically:
+# 1. Bumps @gascity/sdk to 1.0.1
+# 2. Generates changelog
+# 3. Creates git tag @gascity/sdk@1.0.1
+# 4. Publishes to npm
 ```
 
 ## Troubleshooting
 
-### Package name already exists
+### Release Not Triggered
 
-```bash
-# Check if package name is available
-npm view @gascity/client
+Check that:
+- Commit follows conventional commits format
+- Push is to `main` branch
+- Workflow is enabled in repository
 
-# If it exists, you may need to unpublish first (if you own it)
-npm unpublish @gascity/client --force
-```
+### Version Not Bumped
 
-### Authentication errors
-
-```bash
-# Clear npm cache
-npm cache clean --force
-
-# Re-authenticate
-npm login
-
-# Or use token directly
-npm config set //registry.npmjs.org/:_authToken YOUR_TOKEN
-```
-
-### Workspace dependencies
-
-The SDK package depends on the client package using workspace protocol. When publishing:
-
-1. The workspace dependency `@gascity/client: workspace:*` in SDK package.json needs to be replaced with the actual version
-2. This is handled automatically by npm when using workspaces
-
-### Build artifacts missing
-
-```bash
-# Ensure packages are built before publishing
-bun run build
-
-# Verify dist directories exist
-ls packages/@gascity/client/dist
-ls packages/@gascity/sdk/dist
-```
-
-## Post-Publishing Checklist
-
-- [ ] Verify packages are published: `npm view @gascity/client`
-- [ ] Verify version is correct
-- [ ] Test installation: `npm install @gascity/client`
-- [ ] Update documentation if needed
-- [ ] Create GitHub release if this is a new version
-- [ ] Announce the release
-
-## Automated Publishing
-
-For CI/CD automation:
-
-```yaml
-# .github/workflows/publish.yml
-name: Publish to npm
-
-on:
-  push:
-    tags:
-      - 'v*'
-
-jobs:
-  publish:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '18'
-          registry-url: 'https://registry.npmjs.org'
-      
-      - run: bun install
-      - run: bun run build
-      
-      - name: Publish client
-        run: cd packages/@gascity/client && npm publish --access public
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-      
-      - name: Publish SDK
-        run: cd packages/@gascity/sdk && npm publish --access public
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-```
-
-## Security Considerations
-
-- Never commit npm tokens to the repository
-- Use automation tokens, not personal tokens
-- Rotate tokens regularly
-- Use `.npmignore` to exclude sensitive files
-- Review package contents before publishing
-
-## .npmignore
-
-Each package should have a `.npmignore` file to exclude development files:
-
-```
-# Example .npmignore for @gascity/client
-src/
-tests/
-*.spec.ts
-*.test.ts
-tsconfig.json
-vitest.config.ts
-playwright.config.ts
-```
+Check that:
+- Commit message includes `feat:`, `fix:`, or `BREAKING CHANGE:`
+- Changes are in published packages (client/sdk)
 
 ## Support
 
-If you encounter issues:
-
-1. Check npm status: https://status.npmjs.org/
-2. Review npm documentation: https://docs.npmjs.com/
-3. Open an issue: https://github.com/gascity-extra/gascity.ts/issues
+- [Nx Release Documentation](https://nx.dev/docs/guides/nx-release)
+- [Conventional Commits](https://www.conventionalcommits.org/)
+- [Issues](https://github.com/gascity-extra/gascity.ts/issues)
