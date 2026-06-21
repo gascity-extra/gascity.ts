@@ -55,7 +55,7 @@ export const Route = createFileRoute("/api/pty")({
           // Untyped dynamic imports — these native deps are only installed
           // locally; absence is handled gracefully.
           const ptyMod = await import(
-            /* @vite-ignore */ "node-pty" as string
+            /* @vite-ignore */ "node-pty"
           ).catch(() => null) as {
             spawn: (
               cmd: string,
@@ -70,7 +70,7 @@ export const Route = createFileRoute("/api/pty")({
             };
           } | null;
           const wsMod = await import(
-            /* @vite-ignore */ "ws" as string
+            /* @vite-ignore */ "ws"
           ).catch(() => null);
           if (!ptyMod || !wsMod) {
             return new Response(
