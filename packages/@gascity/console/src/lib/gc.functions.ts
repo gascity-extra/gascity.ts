@@ -6,62 +6,39 @@
  * to provide a consistent API for the console UI.
  */
 
-import { 
-  initCity, 
-  startCity, 
-  stopCity, 
-  getCityStatus 
+import {
+  initCity,
+  startCity,
+  stopCity,
+  getCityStatus,
+  closeTask,
+  createSession,
+  interactSession,
+  resetSession,
+  getSessionTranscript
 } from '@gascity/sdk';
-import { 
-  slingTask, 
-  closeTask 
-} from '@gascity/sdk';
-import { 
-  createSession, 
-  interactSession, 
-  resetSession, 
-  getSessionTranscript 
-} from '@gascity/sdk';
-import { 
-  createAgent 
-} from '@gascity/sdk';
+
 import { DefaultService } from '@gascity/client';
 
 // City functions
 
 export async function gcCityStart() {
-  try {
-    // Note: startCity is not yet implemented in SDK, returns error
-    // For now, we'll call the client directly if available
-    // await startCity('default');
-    return {
-      output: "GC city start command executed",
-      ok: true,
-    };
-  } catch (error) {
-    return {
-      output: `Failed to start city: ${error instanceof Error ? error.message : String(error)}`,
-      ok: false,
-      error: error instanceof Error ? error.message : String(error),
-    };
-  }
+  // Note: startCity is not yet implemented in SDK, returns error
+  // For now, we'll call the client directly if available
+  // await startCity('default');
+  return {
+    output: "GC city start command executed",
+    ok: true,
+  };
 }
 
 export async function gcCityStop() {
-  try {
-    // Note: stopCity is not yet implemented in SDK, returns error
-    // await stopCity('default');
-    return {
-      output: "GC city stop command executed",
-      ok: true,
-    };
-  } catch (error) {
-    return {
-      output: `Failed to stop city: ${error instanceof Error ? error.message : String(error)}`,
-      ok: false,
-      error: error instanceof Error ? error.message : String(error),
-    };
-  }
+  // Note: stopCity is not yet implemented in SDK, returns error
+  // await stopCity('default');
+  return {
+    output: "GC city stop command executed",
+    ok: true,
+  };
 }
 
 export async function gcHealth() {
@@ -155,6 +132,7 @@ export async function gcListAgents() {
     })) || [];
     return { agents };
   } catch (error) {
+    console.debug('Error listing agents:', error);
     return {
       agents: [],
     };
@@ -200,6 +178,7 @@ export async function gcListFormulas() {
     })) || [];
     return { formulas };
   } catch (error) {
+    console.debug('Error listing formulas:', error);
     return {
       formulas: [],
     };
@@ -319,20 +298,12 @@ export async function gcListBeads() {
 }
 
 export async function gcCloseBead() {
-  try {
-    // Use closeTask from SDK
-    // await closeTask(beadId, 'default');
-    return {
-      output: "Bead closed",
-      ok: true,
-    };
-  } catch (error) {
-    return {
-      output: `Failed to close: ${error instanceof Error ? error.message : String(error)}`,
-      ok: false,
-      error: error instanceof Error ? error.message : String(error),
-    };
-  }
+  // Use closeTask from SDK
+  // await closeTask(beadId, 'default');
+  return {
+    output: "Bead closed",
+    ok: true,
+  };
 }
 
 export async function gcCityInitWithPacks() {
@@ -376,16 +347,10 @@ export async function gcListPacks() {
 }
 
 export async function gcDoltState() {
-  try {
-    // This would need to be implemented in the API
-    return {
-      state: {},
-    };
-  } catch (error) {
-    return {
-      state: {},
-    };
-  }
+  // This would need to be implemented in the API
+  return {
+    state: {},
+  };
 }
 
 export async function gcRegisterPack() {
@@ -449,35 +414,19 @@ export async function gcListOrders() {
 }
 
 export async function gcOrderRun() {
-  try {
-    // This would need to be implemented in the API
-    return {
-      output: "Order executed",
-      ok: true,
-    };
-  } catch (error) {
-    return {
-      output: `Failed to run: ${error instanceof Error ? error.message : String(error)}`,
-      ok: false,
-      error: error instanceof Error ? error.message : String(error),
-    };
-  }
+  // This would need to be implemented in the API
+  return {
+    output: "Order executed",
+    ok: true,
+  };
 }
 
 export async function gcOrderSetEnabled() {
-  try {
-    // This would need to be implemented in the API
-    return {
-      output: "Order enabled status updated",
-      ok: true,
-    };
-  } catch (error) {
-    return {
-      output: `Failed to set enabled: ${error instanceof Error ? error.message : String(error)}`,
-      ok: false,
-      error: error instanceof Error ? error.message : String(error),
-    };
-  }
+  // This would need to be implemented in the API
+  return {
+    output: "Order enabled status updated",
+    ok: true,
+  };
 }
 
 export async function gcOrderShow() {
@@ -494,6 +443,7 @@ export async function gcOrderShow() {
       raw: JSON.stringify(response, null, 2),
     };
   } catch (error) {
+    console.debug('Error placing order:', error);
     return {
       order: null,
       raw: '',
@@ -519,6 +469,7 @@ export async function gcMailInbox() {
     })) || [];
     return { messages };
   } catch (error) {
+    console.debug('Error getting mail inbox:', error);
     return {
       messages: [],
     };
@@ -589,6 +540,7 @@ export async function gcFormulaShow() {
       raw: JSON.stringify(response, null, 2),
     };
   } catch (error) {
+    console.debug('Error running formula:', error);
     return {
       formula: null,
       raw: '',
