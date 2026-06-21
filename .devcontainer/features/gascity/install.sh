@@ -30,10 +30,9 @@ if [ -f "/home/linuxbrew/.linuxbrew/bin/dolt" ]; then
 fi
 
 # Add bd to PATH
-BD_PATH=$(find /home/linuxbrew/.linuxbrew/Cellar/beads -name "bd" -type f 2>/dev/null | head -n 1)
-if [ -n "$BD_PATH" ]; then
+if [ -f "/home/linuxbrew/.linuxbrew/bin/bd" ]; then
     echo "Creating symlink for bd in /usr/local/bin..."
-    ln -sf "$BD_PATH" /usr/local/bin/bd
+    ln -sf /home/linuxbrew/.linuxbrew/bin/bd /usr/local/bin/bd
 else
     echo "Warning: bd binary not found in beads installation"
 fi

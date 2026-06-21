@@ -36,24 +36,15 @@ fi
 
 if [ "${AUTOREGISTER}" = "true" ]; then
     echo "Registering city with supervisor..."
-
-    # Check if dolt is available
-    if ! command -v dolt &> /dev/null; then
-        echo "Warning: dolt not found, skipping Dolt identity configuration"
-    else
+    if command -v dolt &> /dev/null && command -v gc &> /dev/null; then
         # Configure Dolt identity (required for gc register)
         dolt config --global --add user.name "DevContainer User"
         dolt config --global --add user.email "devcontainer@localhost"
+        gc register .
+        echo "City registered and ready!"
+    else
+        echo "Warning: dolt or gc command not found. Skipping auto-registration."
     fi
-
-    # Check if gc is available
-    if ! command -v gc &> /dev/null; then
-        echo "Error: gc not found, cannot register city"
-        exit 1
-    fi
-
-    gc register .
-    echo "City registered and ready!"
 else
     echo "Auto-register skipped"
 fi

@@ -31,10 +31,11 @@ fi
 echo "Installing sacp-conductor via cargo..."
 cargo install sacp-conductor
 
-# Create symlink for sacp-conductor
+# Copy sacp-conductor binary to avoid permission issues
 if [ -f "$HOME/.cargo/bin/sacp-conductor" ]; then
-    ln -sf "$HOME/.cargo/bin/sacp-conductor" "/usr/local/bin/sacp-conductor"
-    echo "sacp-conductor symlinked to /usr/local/bin/sacp-conductor"
+    cp "$HOME/.cargo/bin/sacp-conductor" /usr/local/bin/sacp-conductor
+    chmod +x /usr/local/bin/sacp-conductor
+    echo "sacp-conductor copied to /usr/local/bin/sacp-conductor"
 else
     echo "Warning: sacp-conductor binary not found after installation"
 fi
