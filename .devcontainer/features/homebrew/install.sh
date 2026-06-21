@@ -18,7 +18,7 @@ if ! command -v brew &> /dev/null; then
     export HOMEBREW_REPOSITORY=/home/linuxbrew/.linuxbrew/Homebrew
     
     # Install Homebrew non-interactively
-    sudo -u $NONROOT_USER /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)" || true
+    sudo -u $NONROOT_USER /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
 fi
 
 # Add Homebrew to PATH for all users
