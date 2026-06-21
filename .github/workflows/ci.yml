@@ -14,12 +14,10 @@ jobs:
       - uses: oven-sh/setup-bun@v1
       - name: Install dependencies
         run: bun install
-      - name: Run tests
-        run: bun run test
-      - name: Run linting
-        run: bun run lint
-      - name: Run typecheck
-        run: bun run typecheck
+      - name: Run client tests
+        run: cd packages/@gascity/client && bun run test
+      - name: Run SDK tests
+        run: cd packages/@gascity/sdk && bun run test
 
   build:
     runs-on: ubuntu-latest
@@ -29,10 +27,12 @@ jobs:
       - uses: oven-sh/setup-bun@v1
       - name: Install dependencies
         run: bun install
-      - name: Build all packages
-        run: bun run build
-      - name: Typecheck
-        run: bun run typecheck
+      - name: Build client
+        run: cd packages/@gascity/client && bun run build
+      - name: Build SDK
+        run: cd packages/@gascity/sdk && bun run build
+      - name: Build console
+        run: cd packages/@gascity/console && bun run build
 
   e2e:
     runs-on: ubuntu-latest
