@@ -31,7 +31,8 @@ elif git rev-parse --git-dir > /dev/null 2>&1; then
     # Stay in current directory if it's a git workspace
     echo "Current directory is a git workspace: ${PWD}"
 else
-    echo "Warning: Could not determine workspace directory, using current directory: ${PWD}"
+    echo "Warning: Could not determine workspace directory, skipping auto-registration"
+    AUTOREGISTER="false"
 fi
 
 if [ "${AUTOREGISTER}" = "true" ]; then
@@ -40,8 +41,11 @@ if [ "${AUTOREGISTER}" = "true" ]; then
         # Configure Dolt identity (required for gc register)
         dolt config --global --add user.name "DevContainer User"
         dolt config --global --add user.email "devcontainer@localhost"
-        gc register .
-        echo "City registered and ready!"
+        if gc register .; then
+            echo "City registered and ready!"
+        else
+            echo "Warning: Failed to register city. Continuing anyway."
+        fi
     else
         echo "Warning: dolt or gc command not found. Skipping auto-registration."
     fi
