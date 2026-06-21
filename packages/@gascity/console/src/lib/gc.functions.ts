@@ -6,18 +6,6 @@
  * to provide a consistent API for the console UI.
  */
 
-import {
-  initCity,
-  startCity,
-  stopCity,
-  getCityStatus,
-  closeTask,
-  createSession,
-  interactSession,
-  resetSession,
-  getSessionTranscript
-} from '@gascity/sdk';
-
 import { DefaultService } from '@gascity/client';
 
 // City functions
@@ -68,34 +56,19 @@ export async function gcHealth() {
 }
 
 export async function gcSupervisorLogs() {
-  try {
-    // This would need to be implemented in the API
-    return {
-      output: "Supervisor logs - not yet implemented via API",
-      source: "supervisor.log",
-    };
-  } catch (error) {
-    return {
-      output: `Failed to get logs: ${error instanceof Error ? error.message : String(error)}`,
-      source: "supervisor.log",
-    };
-  }
+  // This would need to be implemented in the API
+  return {
+    output: "Supervisor logs - not yet implemented via API",
+    source: "supervisor.log",
+  };
 }
 
 export async function gcSupervisorRestart() {
-  try {
-    // This would need to be implemented in the API
-    return {
-      output: "GC supervisor restart - not yet implemented via API",
-      ok: true,
-    };
-  } catch (error) {
-    return {
-      output: `Failed to restart: ${error instanceof Error ? error.message : String(error)}`,
-      ok: false,
-      error: error instanceof Error ? error.message : String(error),
-    };
-  }
+  // This would need to be implemented in the API
+  return {
+    output: "GC supervisor restart - not yet implemented via API",
+    ok: true,
+  };
 }
 
 export async function gcVersion() {
@@ -110,6 +83,7 @@ export async function gcVersion() {
       version: response.version || "1.0.0",
     };
   } catch (error) {
+    console.error('Failed to get version:', error);
     return {
       version: "1.0.0",
     };
@@ -132,7 +106,7 @@ export async function gcListAgents() {
     })) || [];
     return { agents };
   } catch (error) {
-    console.debug('Error listing agents:', error);
+    console.error('Failed to list agents:', error);
     return {
       agents: [],
     };
@@ -156,6 +130,7 @@ export async function gcListCities() {
     })) || [];
     return { cities };
   } catch (error) {
+    console.error('Failed to list cities:', error);
     return {
       cities: [],
     };
@@ -178,7 +153,7 @@ export async function gcListFormulas() {
     })) || [];
     return { formulas };
   } catch (error) {
-    console.debug('Error listing formulas:', error);
+    console.error('Failed to list formulas:', error);
     return {
       formulas: [],
     };
@@ -204,6 +179,7 @@ export async function gcListSessions() {
     })) || [];
     return { sessions };
   } catch (error) {
+    console.error('Failed to list sessions:', error);
     return {
       sessions: [],
     };
@@ -211,67 +187,37 @@ export async function gcListSessions() {
 }
 
 export async function gcSessionPeek() {
-  try {
-    // This would need to be implemented in the API
-    return {
-      output: "Session peek - not yet implemented via API",
-    };
-  } catch (error) {
-    return {
-      output: `Failed to peek: ${error instanceof Error ? error.message : String(error)}`,
-    };
-  }
+  // This would need to be implemented in the API
+  return {
+    output: "Session peek - not yet implemented via API",
+  };
 }
 
 export async function gcSessionNudge() {
-  try {
-    // Use interactSession from SDK
-    // await interactSession(sessionId, message, { city: 'default' });
-    return {
-      output: "Session nudge executed",
-      ok: true,
-    };
-  } catch (error) {
-    return {
-      output: `Failed to nudge: ${error instanceof Error ? error.message : String(error)}`,
-      ok: false,
-      error: error instanceof Error ? error.message : String(error),
-    };
-  }
+  // Use interactSession from SDK
+  // await interactSession(sessionId, message, { city: 'default' });
+  return {
+    output: "Session nudge executed",
+    ok: true,
+  };
 }
 
 export async function gcSessionReset() {
-  try {
-    // Use resetSession from SDK
-    // await resetSession(sessionId, 'default');
-    return {
-      output: "Session reset executed",
-      ok: true,
-    };
-  } catch (error) {
-    return {
-      output: `Failed to reset: ${error instanceof Error ? error.message : String(error)}`,
-      ok: false,
-      error: error instanceof Error ? error.message : String(error),
-    };
-  }
+  // Use resetSession from SDK
+  // await resetSession(sessionId, 'default');
+  return {
+    output: "Session reset executed",
+    ok: true,
+  };
 }
 
 export async function gcSling() {
-  try {
-    // Use slingTask from SDK
-    // const response = await slingTask({ agent, task, city: 'default' });
-    return {
-      output: "Sling task executed",
-      ok: true,
-    };
-  } catch (error) {
-    return {
-      output: `Failed to sling: ${error instanceof Error ? error.message : String(error)}`,
-      ok: false,
-      error: error instanceof Error ? error.message : String(error),
-    };
-  }
+  // Use slingTask from SDK
+  // const response = await slingTask({ agent, task, city: 'default' });
+  return {
+    output: "Sling task executed",
+    ok: true,
+  };
 }
 
 export async function gcListBeads() {
@@ -291,6 +237,7 @@ export async function gcListBeads() {
     })) || [];
     return { beads };
   } catch (error) {
+    console.error('Failed to list beads:', error);
     return {
       beads: [],
     };
@@ -307,20 +254,12 @@ export async function gcCloseBead() {
 }
 
 export async function gcCityInitWithPacks() {
-  try {
-    // Use initCity from SDK
-    // const city = await initCity({ dir, packs, provider }, { waitForReady: true });
-    return {
-      output: "City initialized with packs",
-      ok: true,
-    };
-  } catch (error) {
-    return {
-      output: `Failed to init: ${error instanceof Error ? error.message : String(error)}`,
-      ok: false,
-      error: error instanceof Error ? error.message : String(error),
-    };
-  }
+  // Use initCity from SDK
+  // const city = await initCity({ dir, packs, provider }, { waitForReady: true });
+  return {
+    output: "City initialized with packs",
+    ok: true,
+  };
 }
 
 export async function gcListPacks() {
@@ -340,6 +279,7 @@ export async function gcListPacks() {
     })) || [];
     return { packs };
   } catch (error) {
+    console.error('Failed to list packs:', error);
     return {
       packs: [],
     };
@@ -354,35 +294,19 @@ export async function gcDoltState() {
 }
 
 export async function gcRegisterPack() {
-  try {
-    // This would need to be implemented in the API
-    return {
-      output: "Pack registered",
-      ok: true,
-    };
-  } catch (error) {
-    return {
-      output: `Failed to register: ${error instanceof Error ? error.message : String(error)}`,
-      ok: false,
-      error: error instanceof Error ? error.message : String(error),
-    };
-  }
+  // This would need to be implemented in the API
+  return {
+    output: "Pack registered",
+    ok: true,
+  };
 }
 
 export async function gcUnregisterPack() {
-  try {
-    // This would need to be implemented in the API
-    return {
-      output: "Pack unregistered",
-      ok: true,
-    };
-  } catch (error) {
-    return {
-      output: `Failed to unregister: ${error instanceof Error ? error.message : String(error)}`,
-      ok: false,
-      error: error instanceof Error ? error.message : String(error),
-    };
-  }
+  // This would need to be implemented in the API
+  return {
+    output: "Pack unregistered",
+    ok: true,
+  };
 }
 
 export async function gcListOrders() {
@@ -407,6 +331,7 @@ export async function gcListOrders() {
     })) || [];
     return { orders };
   } catch (error) {
+    console.error('Failed to list orders:', error);
     return {
       orders: [],
     };
@@ -443,7 +368,7 @@ export async function gcOrderShow() {
       raw: JSON.stringify(response, null, 2),
     };
   } catch (error) {
-    console.debug('Error placing order:', error);
+    console.error('Failed to show order:', error);
     return {
       order: null,
       raw: '',
@@ -469,7 +394,7 @@ export async function gcMailInbox() {
     })) || [];
     return { messages };
   } catch (error) {
-    console.debug('Error getting mail inbox:', error);
+    console.error('Failed to get mail inbox:', error);
     return {
       messages: [],
     };
@@ -477,35 +402,19 @@ export async function gcMailInbox() {
 }
 
 export async function gcMailSend() {
-  try {
-    // This would need to be implemented in the API
-    return {
-      output: "Mail sent",
-      ok: true,
-    };
-  } catch (error) {
-    return {
-      output: `Failed to send: ${error instanceof Error ? error.message : String(error)}`,
-      ok: false,
-      error: error instanceof Error ? error.message : String(error),
-    };
-  }
+  // This would need to be implemented in the API
+  return {
+    output: "Mail sent",
+    ok: true,
+  };
 }
 
 export async function gcFormulaRun() {
-  try {
-    // This would need to be implemented in the API
-    return {
-      output: "Formula executed",
-      ok: true,
-    };
-  } catch (error) {
-    return {
-      output: `Failed to run: ${error instanceof Error ? error.message : String(error)}`,
-      ok: false,
-      error: error instanceof Error ? error.message : String(error),
-    };
-  }
+  // This would need to be implemented in the API
+  return {
+    output: "Formula executed",
+    ok: true,
+  };
 }
 
 export async function gcFormulaRunStatus() {
@@ -520,6 +429,7 @@ export async function gcFormulaRunStatus() {
       status: response.status || "idle",
     };
   } catch (error) {
+    console.error('Failed to get formula run status:', error);
     return {
       status: "idle",
     };
@@ -540,7 +450,7 @@ export async function gcFormulaShow() {
       raw: JSON.stringify(response, null, 2),
     };
   } catch (error) {
-    console.debug('Error running formula:', error);
+    console.error('Failed to show formula:', error);
     return {
       formula: null,
       raw: '',
@@ -549,33 +459,17 @@ export async function gcFormulaShow() {
 }
 
 export async function gcRepairPortMirror() {
-  try {
-    // This would need to be implemented in the API
-    return {
-      output: "Port mirror repaired",
-      ok: true,
-    };
-  } catch (error) {
-    return {
-      output: `Failed to repair: ${error instanceof Error ? error.message : String(error)}`,
-      ok: false,
-      error: error instanceof Error ? error.message : String(error),
-    };
-  }
+  // This would need to be implemented in the API
+  return {
+    output: "Port mirror repaired",
+    ok: true,
+  };
 }
 
 export async function gcRigEndpoints() {
-  try {
-    // This would need to be implemented in the API
-    return {
-      output: "Endpoints rigged",
-      ok: true,
-    };
-  } catch (error) {
-    return {
-      output: `Failed to rig: ${error instanceof Error ? error.message : String(error)}`,
-      ok: false,
-      error: error instanceof Error ? error.message : String(error),
-    };
-  }
+  // This would need to be implemented in the API
+  return {
+    output: "Endpoints rigged",
+    ok: true,
+  };
 }

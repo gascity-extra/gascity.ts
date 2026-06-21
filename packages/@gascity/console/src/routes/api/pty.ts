@@ -56,21 +56,19 @@ export const Route = createFileRoute("/api/pty")({
           // locally; absence is handled gracefully.
           const ptyMod = await import(
             /* @vite-ignore */ "node-pty" as string
-          ).catch(() => null) as
-            | {
-                spawn: (
-                  cmd: string,
-                  args: string[],
-                  opts: Record<string, unknown>,
-                ) => {
-                  onData: (cb: (chunk: string) => void) => void;
-                  onExit: (cb: (e: { exitCode: number }) => void) => void;
-                  write: (s: string) => void;
-                  resize: (cols: number, rows: number) => void;
-                  kill: () => void;
-                };
-              }
-            | null;
+          ).catch(() => null) as {
+            spawn: (
+              cmd: string,
+              args: string[],
+              opts: Record<string, unknown>,
+            ) => {
+              onData: (cb: (chunk: string) => void) => void;
+              onExit: (cb: (e: { exitCode: number }) => void) => void;
+              write: (s: string) => void;
+              resize: (cols: number, rows: number) => void;
+              kill: () => void;
+            };
+          } | null;
           const wsMod = await import(
             /* @vite-ignore */ "ws" as string
           ).catch(() => null);
@@ -152,7 +150,7 @@ export const Route = createFileRoute("/api/pty")({
           });
 
           ws.addEventListener("message", (ev) => {
-            const data = (ev as MessageEvent).data;
+            const data = ev.data;
             if (typeof data === "string") {
               try {
                 const m = JSON.parse(data);
