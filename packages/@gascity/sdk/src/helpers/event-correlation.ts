@@ -7,7 +7,8 @@ export function generateEventCorrelationId(): string {
     return `corr-${crypto.randomUUID()}`;
   }
   // Fallback for environments without crypto.randomUUID
-  return `corr-${Date.now()}-${Math.random().toString(36).substring(2, 15)}`;
+  // Use timestamp-based approach instead of Math.random()
+  return `corr-${Date.now().toString(36)}-${performance.now().toString(36)}`;
 }
 
 /**

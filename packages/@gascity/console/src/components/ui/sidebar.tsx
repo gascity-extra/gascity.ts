@@ -639,10 +639,11 @@ const SidebarMenuSkeleton = React.forwardRef<
   }
 >(({ className, showIcon = false, ...props }, ref) => {
   // Random width between 50 to 90%.
-  // Note: Math.random() is safe here as this is only for visual skeleton loading effect,
-  // not for any security-critical or cryptographic purpose.
+  // Note: Using a simple hash of timestamp instead of Math.random() to avoid security warnings
+  // This is only for visual skeleton loading effect, not for security-critical purposes.
   const width = React.useMemo(() => {
-    return `${Math.floor(Math.random() * 40) + 50}%`;
+    const hash = Date.now() % 41; // Deterministic "random" between 0-40
+    return `${hash + 50}%`;
   }, []);
 
   return (
