@@ -7,7 +7,7 @@ This project uses **Nx Release** for automated versioning and publishing based o
 - **Automated Versioning**: Versions are determined automatically based on conventional commits
 - **Independent Releases**: Each package (@gascity/client, @gascity/sdk) is versioned independently
 - **CI/CD Integration**: Releases are triggered automatically on push to main branch
-- **GitHub Trust**: Uses npm trust for GitHub Actions (no tokens in CI)
+- **GitHub Actions**: Uses GitHub Actions for automated publishing
 
 ## How It Works
 
@@ -26,7 +26,7 @@ Versions are determined by commit messages:
 3. **Version Bump**: Automatically bumps versions for affected packages
 4. **Changelog**: Generates changelog entries
 5. **Git Tag**: Creates git tags for new versions
-6. **Publish**: Publishes to npm using GitHub Actions trust
+6. **Publish**: Publishes to npm using GitHub Actions
 
 ### Independent Releases
 
@@ -79,17 +79,16 @@ The `.github/workflows/release.yml` workflow:
 
 ## Setup Requirements
 
-### npm Trust (Already Configured)
+### npm Token
 
-GitHub Actions trust is already configured for:
-- `@gascity/client`
-- `@gascity/sdk`
-
-No npm tokens needed in GitHub Secrets!
+For publishing to npm, you need to configure `NPM_TOKEN` in GitHub Secrets:
+1. Go to repository Settings → Secrets and variables → Actions
+2. Add a new secret named `NPM_TOKEN`
+3. Set the value to your npm automation token (from npmjs.org)
 
 ### GitHub Token
 
-The workflow uses `GITHUB_TOKEN` automatically provided by GitHub Actions.
+The workflow uses `GITHUB_TOKEN` automatically provided by GitHub Actions for git operations and GitHub releases.
 
 ## Configuration
 
