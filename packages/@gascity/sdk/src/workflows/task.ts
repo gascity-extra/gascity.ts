@@ -96,7 +96,7 @@ async function withRetry<T>(
  * ```
  */
 export function generateCorrelationId(): string {
-  return `task_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`;
+  return `task_${Date.now()}_${crypto.randomUUID().replace(/-/g, '').substring(0, 9)}`;
 }
 
 /**
