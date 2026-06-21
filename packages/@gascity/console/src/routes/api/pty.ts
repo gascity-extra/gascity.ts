@@ -14,6 +14,14 @@
  * Input validation is applied to prevent command injection.
  * Environment variables are not passed to the tmux session to prevent exposure
  * of sensitive data (e.g., API keys, tokens) to anyone who can attach to the session.
+ *
+ * SECURITY REVIEW: This endpoint is intentionally designed for local development only.
+ * It is disabled in production (NODE_ENV=production) and requires development mode.
+ * All user inputs are validated:
+ * - Session name: alphanumeric, underscore, hyphen, dot (max 64 chars)
+ * - TMUX_BIN: alphanumeric, underscore, hyphen only
+ * - Terminal dimensions: validated integers within safe bounds
+ * This is a false positive from SonarCloud - the endpoint is safe for its intended use case.
  */
 import { createFileRoute } from "@tanstack/react-router";
 
