@@ -39,9 +39,9 @@ if [ -n "$PACKAGES" ]; then
     PACKAGES_LIST=$(echo "$PACKAGES" | sed 's/\[//g' | sed 's/\]//g' | sed 's/,/ /g' | tr -d '"')
     
     if [ "$(id -u)" = "0" ]; then
-        sudo -u vscode /home/linuxbrew/.linuxbrew/bin/brew install $PACKAGES_LIST || sudo -u vscode /home/linuxbrew/.linuxbrew/bin/brew upgrade $PACKAGES_LIST
+        sudo -u vscode /home/linuxbrew/.linuxbrew/bin/brew install "$PACKAGES_LIST" || sudo -u vscode /home/linuxbrew/.linuxbrew/bin/brew upgrade "$PACKAGES_LIST"
     else
-        brew install $PACKAGES_LIST || brew upgrade $PACKAGES_LIST
+        brew install "$PACKAGES_LIST" || brew upgrade "$PACKAGES_LIST"
     fi
     
     echo "Packages installed successfully!"
@@ -51,7 +51,7 @@ if [ -n "$PACKAGES" ]; then
         # Extract package name (last part after /)
         package_name=$(echo "$package" | awk -F'/' '{print $NF}')
         if [ -f "/home/linuxbrew/.linuxbrew/bin/$package_name" ] && [ ! -f "/usr/local/bin/$package_name" ]; then
-            ln -sf /home/linuxbrew/.linuxbrew/bin/$package_name /usr/local/bin/$package_name
+            ln -sf "/home/linuxbrew/.linuxbrew/bin/$package_name" "/usr/local/bin/$package_name"
         fi
     done
 fi

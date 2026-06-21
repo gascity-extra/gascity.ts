@@ -14,8 +14,8 @@ echo "AutoRegister: ${AUTOREGISTER}"
 # Try to find and navigate to workspace
 if [ -d "/workspaces/gascity-devcontainer" ]; then
     cd /workspaces/gascity-devcontainer
-elif [ -d "/workspaces/$(basename ${PWD})" ]; then
-    cd /workspaces/$(basename ${PWD})
+elif [ -d "/workspaces/$(basename "${PWD}")" ]; then
+    cd "/workspaces/$(basename "${PWD}")"
 elif [ -d "${PWD}" ]; then
     # Stay in current directory if it's a git workspace
     if git rev-parse --git-dir > /dev/null 2>&1; then
