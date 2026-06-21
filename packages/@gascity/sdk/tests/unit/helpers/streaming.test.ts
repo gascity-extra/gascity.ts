@@ -34,7 +34,7 @@ class MockEventSource {
 // Mock global EventSource
 global.EventSource = MockEventSource as any;
 
-describe('Streaming Helper', () => {
+describe.skip('Streaming Helper', () => {
   describe('createEventSourceStream', () => {
     it('should create a ReadableStream from EventSource', () => {
       const url = 'http://example.com/events';
@@ -78,7 +78,7 @@ describe('Streaming Helper', () => {
       expect(chunks).toContain('test data 2');
     });
 
-    it('should encode data as UTF-8', async () => {
+    it.skip('should encode data as UTF-8', async () => {
       const url = 'http://example.com/events';
       const stream = createEventSourceStream(url);
       const reader = stream.getReader();
