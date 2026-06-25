@@ -8,9 +8,10 @@
       "installOhMyZsh": true,
       "upgradePackages": true
     },
-    "./features/gascity": {
-      "autoRegister": true
+    "ghcr.io/devcontainers/features/node:1": {
+      "version": "24"
     },
+    "ghcr.io/devcontainers/features/bun:1": {},
     "./features/devin": {
       "version": "latest"
     },
@@ -31,5 +32,6 @@
     "TERM": "xterm-256color"
   },
   "remoteUser": "vscode",
-  "runArgs": ["--tty"]
+  "runArgs": ["--tty"],
+  "postCreateCommand": "echo 'Devcontainer ready.'"
 }
