@@ -1,6 +1,6 @@
 {
   "id": "devin-cli",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "name": "Devin CLI",
   "description": "Install Devin CLI for AI-powered development",
   "documentationURL": "https://devin.ai",
@@ -15,7 +15,13 @@
     "version": {
       "type": "string",
       "default": "latest",
-      "description": "Devin CLI version to install"
+      "description": "Devin CLI version to install. With installMethod=script, the upstream installer is used (version is informational; the installer always pins to the latest promoted release). With installMethod=binary, set to a concrete release tag (e.g. 2026.8.18) to pin, or 'latest' for current."
+    },
+    "installMethod": {
+      "type": "string",
+      "enum": ["script", "binary"],
+      "default": "script",
+      "description": "How to install Devin CLI. 'script' (default) downloads the official installer and strips the interactive `devin setup` wizard so non-interactive container builds succeed. 'binary' skips the installer entirely and downloads the platform tarball directly from the manifest, which is the most headless-safe option."
     }
   }
 }
