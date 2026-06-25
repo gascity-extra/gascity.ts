@@ -12,7 +12,6 @@
       "version": "24",
       "installGlibc": true
     },
-    "ghcr.io/devcontainers/features/bun:1": {},
     "./features/devin": {
       "version": "latest"
     },
