@@ -8,16 +8,17 @@
       "installOhMyZsh": true,
       "upgradePackages": true
     },
-    "./features/gascity": {
-      "autoRegister": true
+    "ghcr.io/devcontainers/features/node:2.1.0": {
+      "version": "24",
+      "installGlibc": true
     },
+    "./features/bun": {},
     "./features/devin": {
       "version": "latest"
     },
     "./features/cursor": {
       "version": "latest"
-    },
-    "./features/sacp-conductor": {}
+    }
   },
   "customizations": {
     "vscode": {
@@ -31,5 +32,7 @@
     "TERM": "xterm-256color"
   },
   "remoteUser": "vscode",
-  "runArgs": ["--tty"]
+  "runArgs": ["--tty"],
+  "postCreateCommand": ""
 }
+
