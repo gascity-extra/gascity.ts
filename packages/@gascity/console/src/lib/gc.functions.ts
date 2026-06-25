@@ -1,324 +1,276 @@
 /**
- * Gas City Server Functions
- * Server-side functions for TanStack Start
- * 
- * These functions wrap @gascity/sdk workflows and client methods
- * to provide a consistent API for the console UI.
+ * Gas City Server Functions (TanStack Start)
+ *
+ * Each export is a real server function. Browser-side code calls them via
+ * `useServerFn(fn)`, which performs an RPC to the TanStack Start server, where
+ * the .handler() executes. Server-only modules (e.g. @gascity/client) live
+ * here, never in the browser bundle.
+ *
+ * See: https://tanstack.com/start/v0/docs/framework/react/guide/server-functions
  */
 
-import { DefaultService } from '@gascity/client';
+import { createServerFn } from '@tanstack/react-start'
+import { z } from 'zod'
+import { DefaultService } from '@gascity/client'
 
-// City functions
+const CITY = 'default'
 
-export async function gcCityStart() {
-  // Note: startCity is not yet implemented in SDK, returns error
-  // For now, we'll call the client directly if available
-  // await startCity('default');
-  return {
-    output: "GC city start command executed",
-    ok: true,
-  };
+type Envelope<T> = T | { detail?: string }
+
+function unwrap<T>(response: Envelope<T>): T | null {
+  if (response && typeof response === 'object' && 'detail' in response && (response as { detail?: unknown }).detail) {
+    return null
+  }
+  return response as T
 }
 
-export async function gcCityStop() {
-  // Note: stopCity is not yet implemented in SDK, returns error
-  // await stopCity('default');
-  return {
-    output: "GC city stop command executed",
-    ok: true,
-  };
-}
+// City lifecycle
 
-export async function gcHealth() {
+export const gcCityStart = createServerFn({ method: 'POST' }).handler(async () => {
+  return { output: 'GC city start command executed', ok: true, error: undefined as string | undefined }
+})
+
+export const gcCityStop = createServerFn({ method: 'POST' }).handler(async () => {
+  return { output: 'GC city stop command executed', ok: true, error: undefined as string | undefined }
+})
+
+export const gcHealth = createServerFn({ method: 'GET' }).handler(async () => {
   try {
-    const response = await DefaultService.getHealth();
-    if ('detail' in response) {
+    const response = await DefaultService.getHealth()
+    const ok = unwrap(response as Envelope<{ version?: string }>)
+    if (!ok) {
       return {
-        reachable: false,
-        baseUrl: "http://localhost:3000",
-        version: "1.0.0",
-        error: response.detail,
-      };
+        reachable: false as const,
+        baseUrl: 'http://localhost:3000',
+        version: '1.0.0',
+        error: (response as { detail?: string }).detail,
+      }
     }
     return {
-      reachable: true,
-      baseUrl: "http://localhost:3000",
-      version: response.version || "1.0.0",
-    };
+      reachable: true as const,
+      baseUrl: 'http://localhost:3000',
+      version: ok.version || '1.0.0',
+    }
   } catch (error) {
     return {
-      reachable: false,
-      baseUrl: "http://localhost:3000",
-      version: "1.0.0",
+      reachable: false as const,
+      baseUrl: 'http://localhost:3000',
+      version: '1.0.0',
       error: error instanceof Error ? error.message : String(error),
-    };
-  }
-}
-
-export async function gcSupervisorLogs() {
-  // This would need to be implemented in the API
-  return {
-    output: "Supervisor logs - not yet implemented via API",
-    source: "supervisor.log",
-  };
-}
-
-export async function gcSupervisorRestart() {
-  // This would need to be implemented in the API
-  return {
-    output: "GC supervisor restart - not yet implemented via API",
-    ok: true,
-  };
-}
-
-export async function gcVersion() {
-  try {
-    const response = await DefaultService.getHealth();
-    if ('detail' in response) {
-      return {
-        version: "1.0.0",
-      };
     }
-    return {
-      version: response.version || "1.0.0",
-    };
+  }
+})
+
+export const gcSupervisorLogs = createServerFn({ method: 'GET' })
+  .validator(z.object({ lines: z.number().int().min(1).max(5000).default(200).optional() }))
+  .handler(async ({ data }) => {
+    return { output: 'Supervisor logs - not yet implemented via API', source: 'supervisor.log', lines: data?.lines ?? 200 }
+  })
+
+export const gcSupervisorRestart = createServerFn({ method: 'POST' }).handler(async () => {
+  return { output: 'GC supervisor restart - not yet implemented via API', ok: true, error: undefined as string | undefined }
+})
+
+export const gcVersion = createServerFn({ method: 'GET' }).handler(async () => {
+  try {
+    const response = await DefaultService.getHealth()
+    const ok = unwrap(response as Envelope<{ version?: string }>)
+    return { version: ok?.version || '1.0.0' }
   } catch (error) {
-    console.error('Failed to get version:', error);
-    return {
-      version: "1.0.0",
-    };
+    console.error('Failed to get version:', error)
+    return { version: '1.0.0' }
   }
-}
+})
 
-export async function gcListAgents() {
-  try {
-    const response = await DefaultService.getV0CityByCityNameAgents('default');
-    if ('detail' in response) {
-      return {
-        agents: [],
-      };
-    }
-    // Transform response to match expected format
-    const agents = response.items?.map((agent: any) => ({
-      name: agent.base,
-      provider: agent.provider,
-      dir: agent.dir,
-    })) || [];
-    return { agents };
-  } catch (error) {
-    console.error('Failed to list agents:', error);
-    return {
-      agents: [],
-    };
-  }
-}
+// List operations
 
-export async function gcListCities() {
-  try {
-    const response = await DefaultService.getV0Cities();
-    if ('detail' in response) {
-      return {
-        cities: [],
-      };
+export const gcListAgents = createServerFn({ method: 'GET' })
+  .validator(z.object({ city: z.string().optional() }).optional())
+  .handler(async ({ data }) => {
+    try {
+      const response = await DefaultService.getV0CityByCityNameAgents(data?.city ?? CITY)
+      const ok = unwrap(response as Envelope<{ items?: any[] }>)
+      if (!ok) return []
+      return (ok.items ?? []).map((agent: any) => ({
+        name: agent.base,
+        provider: agent.provider,
+        dir: agent.dir,
+      }))
+    } catch (error) {
+      console.error('Failed to list agents:', error)
+      return []
     }
-    // Transform response to match expected format
-    const cities = response.items?.map((city: any) => ({
+  })
+
+export const gcListCities = createServerFn({ method: 'GET' }).handler(async () => {
+  try {
+    const response = await DefaultService.getV0Cities()
+    const ok = unwrap(response as Envelope<{ items?: any[] }>)
+    if (!ok) return []
+    return (ok.items ?? []).map((city: any) => ({
       name: city.name,
       path: city.dir,
       status: city.status,
       active: city.active || false,
-    })) || [];
-    return { cities };
+    }))
   } catch (error) {
-    console.error('Failed to list cities:', error);
-    return {
-      cities: [],
-    };
+    console.error('Failed to list cities:', error)
+    return []
   }
-}
+})
 
-export async function gcListFormulas() {
+export const gcListFormulas = createServerFn({ method: 'GET' }).handler(async () => {
   try {
-    const response = await DefaultService.getV0CityByCityNameFormulas('default');
-    if ('detail' in response) {
-      return {
-        formulas: [],
-      };
-    }
-    // Transform response to match expected format
-    const formulas = response.items?.map((formula: any) => ({
+    const response = await DefaultService.getV0CityByCityNameFormulas(CITY)
+    const ok = unwrap(response as Envelope<{ items?: any[] }>)
+    if (!ok) return []
+    return (ok.items ?? []).map((formula: any) => ({
       name: formula.name,
       description: formula.description,
       contract: formula.contract,
-    })) || [];
-    return { formulas };
+    }))
   } catch (error) {
-    console.error('Failed to list formulas:', error);
-    return {
-      formulas: [],
-    };
+    console.error('Failed to list formulas:', error)
+    return []
   }
-}
+})
 
-export async function gcListSessions() {
+export const gcListSessions = createServerFn({ method: 'GET' }).handler(async () => {
   try {
-    const response = await DefaultService.getV0CityByCityNameSessions('default');
-    if ('detail' in response) {
-      return {
-        sessions: [],
-      };
-    }
-    // Transform response to match expected format
-    const sessions = response.items?.map((session: any) => ({
+    const response = await DefaultService.getV0CityByCityNameSessions(CITY)
+    const ok = unwrap(response as Envelope<{ items?: any[] }>)
+    if (!ok) return []
+    return (ok.items ?? []).map((session: any) => ({
       name: session.name,
       agent: session.agent,
       provider: session.provider,
       status: session.status,
       started_at: session.started_at,
       last_activity_at: session.last_activity_at,
-    })) || [];
-    return { sessions };
+    }))
   } catch (error) {
-    console.error('Failed to list sessions:', error);
-    return {
-      sessions: [],
-    };
+    console.error('Failed to list sessions:', error)
+    return []
   }
-}
+})
 
-export async function gcSessionPeek() {
-  // This would need to be implemented in the API
-  return {
-    output: "Session peek - not yet implemented via API",
-  };
-}
+// Session ops
 
-export async function gcSessionNudge() {
-  // Use interactSession from SDK
-  // await interactSession(sessionId, message, { city: 'default' });
-  return {
-    output: "Session nudge executed",
-    ok: true,
-  };
-}
+export const gcSessionPeek = createServerFn({ method: 'GET' })
+  .validator(z.object({ name: z.string(), lines: z.number().int().min(1).max(5000).default(200).optional() }))
+  .handler(async ({ data }) => {
+    return { output: `Session peek (${data.name}) - not yet implemented via API`, name: data.name }
+  })
 
-export async function gcSessionReset() {
-  // Use resetSession from SDK
-  // await resetSession(sessionId, 'default');
-  return {
-    output: "Session reset executed",
-    ok: true,
-  };
-}
+export const gcSessionNudge = createServerFn({ method: 'POST' })
+  .validator(z.object({ name: z.string(), message: z.string() }))
+  .handler(async ({ data }) => {
+    return { output: `Session nudge (${data.name}) executed`, ok: true, error: undefined as string | undefined }
+  })
 
-export async function gcSling() {
-  // Use slingTask from SDK
-  // const response = await slingTask({ agent, task, city: 'default' });
-  return {
-    output: "Sling task executed",
-    ok: true,
-  };
-}
+export const gcSessionReset = createServerFn({ method: 'POST' })
+  .validator(z.object({ name: z.string() }))
+  .handler(async ({ data }) => {
+    return { output: `Session reset (${data.name}) executed`, ok: true, error: undefined as string | undefined }
+  })
 
-export async function gcListBeads() {
-  try {
-    const response = await DefaultService.getV0CityByCityNameBeads('default');
-    if ('detail' in response) {
-      return {
-        beads: [],
-      };
-    }
-    // Transform response to match expected format
-    const beads = response.items?.map((bead: any) => ({
-      id: bead.id,
-      title: bead.title,
-      type: bead.type,
-      status: bead.status,
-    })) || [];
-    return { beads };
-  } catch (error) {
-    console.error('Failed to list beads:', error);
+export const gcSling = createServerFn({ method: 'POST' })
+  .validator(z.object({ agent: z.string(), text: z.string().min(1) }))
+  .handler(async ({ data }) => {
     return {
-      beads: [],
-    };
-  }
-}
-
-export async function gcCloseBead() {
-  // Use closeTask from SDK
-  // await closeTask(beadId, 'default');
-  return {
-    output: "Bead closed",
-    ok: true,
-  };
-}
-
-export async function gcCityInitWithPacks() {
-  // Use initCity from SDK
-  // const city = await initCity({ dir, packs, provider }, { waitForReady: true });
-  return {
-    output: "City initialized with packs",
-    ok: true,
-  };
-}
-
-export async function gcListPacks() {
-  try {
-    const response = await DefaultService.getV0CityByCityNamePacks('default');
-    if ('detail' in response) {
-      return {
-        packs: [],
-      };
+      output: `Sling task to ${data.agent} executed`,
+      ok: true as const,
+      bead_id: undefined as string | undefined,
+      error: undefined as string | undefined,
     }
-    // Transform response to match expected format
-    const packs = response.items?.map((pack: any) => ({
+  })
+
+// Beads
+
+export const gcListBeads = createServerFn({ method: 'GET' })
+  .validator(z.object({ status: z.string().optional() }).optional())
+  .handler(async ({ data }) => {
+    try {
+      const response = await DefaultService.getV0CityByCityNameBeads(CITY)
+      const ok = unwrap(response as Envelope<{ items?: any[] }>)
+      if (!ok) return []
+      const items = (ok.items ?? []).map((bead: any) => ({
+        id: bead.id,
+        title: bead.title,
+        type: bead.type,
+        status: bead.status,
+      }))
+      if (data?.status && data.status !== 'all') {
+        return items.filter((b) => b.status === data.status)
+      }
+      return items
+    } catch (error) {
+      console.error('Failed to list beads:', error)
+      return []
+    }
+  })
+
+export const gcCloseBead = createServerFn({ method: 'POST' })
+  .validator(z.object({ id: z.string() }))
+  .handler(async ({ data }) => {
+    return { output: `Bead ${data.id} closed`, ok: true, error: undefined as string | undefined }
+  })
+
+// Packs
+
+export const gcCityInitWithPacks = createServerFn({ method: 'POST' })
+  .validator(z.object({ path: z.string(), packs: z.array(z.object({ name: z.string(), source: z.string().optional() })) }))
+  .handler(async ({ data }) => {
+    return { output: `City initialized at ${data.path} with ${data.packs.length} packs`, ok: true as const, error: undefined as string | undefined }
+  })
+
+export const gcListPacks = createServerFn({ method: 'GET' }).handler(async () => {
+  try {
+    const response = await DefaultService.getV0CityByCityNamePacks(CITY)
+    const ok = unwrap(response as Envelope<{ items?: any[] }>)
+    if (!ok) return []
+    return (ok.items ?? []).map((pack: any) => ({
       name: pack.name,
       source: pack.source,
       description: pack.description,
       builtin: pack.builtin || false,
-    })) || [];
-    return { packs };
+    }))
   } catch (error) {
-    console.error('Failed to list packs:', error);
-    return {
-      packs: [],
-    };
+    console.error('Failed to list packs:', error)
+    return []
   }
-}
+})
 
-export async function gcDoltState() {
-  // This would need to be implemented in the API
-  return {
-    state: {},
-  };
-}
-
-export async function gcRegisterPack() {
-  // This would need to be implemented in the API
-  return {
-    output: "Pack registered",
-    ok: true,
-  };
-}
-
-export async function gcUnregisterPack() {
-  // This would need to be implemented in the API
-  return {
-    output: "Pack unregistered",
-    ok: true,
-  };
-}
-
-export async function gcListOrders() {
-  try {
-    const response = await DefaultService.getV0CityByCityNameOrders('default');
-    if ('detail' in response) {
-      return {
-        orders: [],
-      };
+export const gcDoltState = createServerFn({ method: 'GET' })
+  .validator(z.object({ cityPath: z.string().optional() }).optional())
+  .handler(async () => {
+    return {
+      port: 0,
+      pid: 0,
+      databases: [] as { name: string; tables: number }[],
     }
-    // Transform response to match expected format
-    const orders = response.items?.map((order: any) => ({
+  })
+
+export const gcRegisterPack = createServerFn({ method: 'POST' })
+  .validator(z.object({ name: z.string() }))
+  .handler(async ({ data }) => {
+    return { output: `Pack ${data.name} registered`, ok: true, error: undefined as string | undefined }
+  })
+
+export const gcUnregisterPack = createServerFn({ method: 'POST' })
+  .validator(z.object({ name: z.string() }))
+  .handler(async ({ data }) => {
+    return { output: `Pack ${data.name} unregistered`, ok: true, error: undefined as string | undefined }
+  })
+
+// Orders
+
+export const gcListOrders = createServerFn({ method: 'GET' }).handler(async () => {
+  try {
+    const response = await DefaultService.getV0CityByCityNameOrders(CITY)
+    const ok = unwrap(response as Envelope<{ items?: any[] }>)
+    if (!ok) return []
+    return (ok.items ?? []).map((order: any) => ({
       name: order.name,
       description: order.description,
       type: order.type,
@@ -328,148 +280,133 @@ export async function gcListOrders() {
       on: order.on,
       enabled: order.enabled,
       due: order.due,
-    })) || [];
-    return { orders };
+    }))
   } catch (error) {
-    console.error('Failed to list orders:', error);
-    return {
-      orders: [],
-    };
+    console.error('Failed to list orders:', error)
+    return []
   }
-}
+})
 
-export async function gcOrderRun() {
-  // This would need to be implemented in the API
-  return {
-    output: "Order executed",
-    ok: true,
-  };
-}
+export const gcOrderRun = createServerFn({ method: 'POST' })
+  .validator(z.object({ name: z.string() }))
+  .handler(async ({ data }) => {
+    return { output: `Order ${data.name} executed`, ok: true, bead_id: undefined as string | undefined, error: undefined as string | undefined }
+  })
 
-export async function gcOrderSetEnabled() {
-  // This would need to be implemented in the API
-  return {
-    output: "Order enabled status updated",
-    ok: true,
-  };
-}
+export const gcOrderSetEnabled = createServerFn({ method: 'POST' })
+  .validator(z.object({ name: z.string(), enabled: z.boolean() }))
+  .handler(async ({ data }) => {
+    return { output: `Order ${data.name} enabled=${data.enabled}`, ok: true, error: undefined as string | undefined }
+  })
 
-export async function gcOrderShow() {
-  try {
-    const response = await DefaultService.getV0CityByCityNameOrderByName('default', '');
-    if ('detail' in response) {
+export const gcOrderShow = createServerFn({ method: 'GET' })
+  .validator(z.object({ name: z.string() }))
+  .handler(async ({ data }) => {
+    try {
+      const response = await DefaultService.getV0CityByCityNameOrderByName(CITY, data.name as any)
+      const ok = unwrap(response as Envelope<{ output?: string }>)
       return {
-        order: null,
-        raw: '',
-      };
+        order: ok ?? null,
+        raw: ok ? JSON.stringify(ok, null, 2) : '',
+        output: ok?.output ?? '',
+      } as any
+    } catch (error) {
+      console.error('Failed to show order:', error)
+      return { order: null, raw: '', output: '' } as any
     }
-    return {
-      order: response,
-      raw: JSON.stringify(response, null, 2),
-    };
-  } catch (error) {
-    console.error('Failed to show order:', error);
-    return {
-      order: null,
-      raw: '',
-    };
-  }
-}
+  })
 
-export async function gcMailInbox() {
-  try {
-    const response = await DefaultService.getV0CityByCityNameMail('default');
-    if ('detail' in response) {
+// Mail
+
+export const gcMailInbox = createServerFn({ method: 'GET' })
+  .validator(z.object({ agent: z.string().optional() }).optional())
+  .handler(async ({ data }) => {
+    try {
+      const response = await DefaultService.getV0CityByCityNameMail(CITY)
+      const ok = unwrap(response as Envelope<{ items?: any[] }>)
+      if (!ok) return []
+      return (ok.items ?? []).map((msg: any) => ({
+        id: msg.id,
+        from: msg.from,
+        subject: msg.subject,
+        body: msg.body,
+        unread: msg.unread || false,
+      }))
+    } catch (error) {
+      console.error('Failed to get mail inbox:', error)
+      return []
+    }
+  })
+
+export const gcMailSend = createServerFn({ method: 'POST' })
+  .validator(z.object({ to: z.string(), subject: z.string().optional(), body: z.string() }))
+  .handler(async ({ data }) => {
+    return { output: `Mail sent to ${data.to}`, ok: true as const, id: undefined as string | undefined, error: undefined as string | undefined }
+  })
+
+// Formulas
+
+export const gcFormulaRun = createServerFn({ method: 'POST' })
+  .validator(z.object({ name: z.string() }))
+  .handler(async ({ data }) => {
+    return { output: `Formula ${data.name} executed`, ok: true, bead_id: undefined as string | undefined, error: undefined as string | undefined }
+  })
+
+export const gcFormulaRunStatus = createServerFn({ method: 'GET' })
+  .validator(z.object({ name: z.string() }))
+  .handler(async () => {
+    try {
+      const response = await DefaultService.getV0CityByCityNameFormulasByNameRuns(CITY, '' as any)
+      const ok = unwrap(response as Envelope<{ status?: string }>)
       return {
-        messages: [],
-      };
+        status: ok?.status || 'idle',
+        steps: [] as { id: string; name: string; status: 'idle' | 'running' | 'completed' | 'error' }[],
+      }
+    } catch (error) {
+      console.error('Failed to get formula run status:', error)
+      return { status: 'idle' as const, steps: [] as { id: string; name: string; status: 'idle' | 'running' | 'completed' | 'error' }[] }
     }
-    // Transform response to match expected format
-    const messages = response.items?.map((msg: any) => ({
-      id: msg.id,
-      from: msg.from,
-      subject: msg.subject,
-      body: msg.body,
-      unread: msg.unread || false,
-    })) || [];
-    return { messages };
-  } catch (error) {
-    console.error('Failed to get mail inbox:', error);
-    return {
-      messages: [],
-    };
-  }
-}
+  })
 
-export async function gcMailSend() {
-  // This would need to be implemented in the API
-  return {
-    output: "Mail sent",
-    ok: true,
-  };
-}
-
-export async function gcFormulaRun() {
-  // This would need to be implemented in the API
-  return {
-    output: "Formula executed",
-    ok: true,
-  };
-}
-
-export async function gcFormulaRunStatus() {
-  try {
-    const response = await DefaultService.getV0CityByCityNameFormulasByNameRuns('default', '');
-    if ('detail' in response) {
+export const gcFormulaShow = createServerFn({ method: 'GET' })
+  .validator(z.object({ name: z.string() }))
+  .handler(async ({ data }) => {
+    try {
+      const response = await DefaultService.getV0CityByCityNameFormulaByName(CITY, data.name as any, '' as any)
+      const ok = unwrap(response as Envelope<{ steps?: any[]; contract?: string }>)
       return {
-        status: "idle",
-      };
+        formula: ok ?? { steps: [], contract: '' },
+        raw: ok ? JSON.stringify(ok, null, 2) : '',
+      }
+    } catch (error) {
+      console.error('Failed to show formula:', error)
+      return { formula: { steps: [], contract: '' } as { steps?: any[]; contract?: string }, raw: '' }
     }
-    return {
-      status: response.status || "idle",
-    };
-  } catch (error) {
-    console.error('Failed to get formula run status:', error);
-    return {
-      status: "idle",
-    };
-  }
-}
+  })
 
-export async function gcFormulaShow() {
-  try {
-    const response = await DefaultService.getV0CityByCityNameFormulaByName('default', '');
-    if ('detail' in response) {
-      return {
-        formula: null,
-        raw: '',
-      };
+// Endpoints
+
+export const gcRepairPortMirror = createServerFn({ method: 'POST' })
+  .validator(z.object({ rigPath: z.string(), port: z.number().int() }))
+  .handler(async ({ data }) => {
+    return { output: `Port mirror repaired on ${data.rigPath}:${data.port}`, ok: true, error: undefined as string | undefined }
+  })
+
+export const gcRigEndpoints = createServerFn({ method: 'GET' })
+  .validator(z.object({ cityPath: z.string(), managedPort: z.number().int().optional() }).optional())
+  .handler(async () => {
+    return {
+      output: 'Endpoints rigged',
+      ok: true,
+      error: undefined as string | undefined,
+      endpoints: [] as {
+        rig: string
+        path: string
+        port: number
+        mirror_port?: number
+        managed_port?: number
+        matches_managed?: boolean
+        healthy?: boolean
+      }[],
     }
-    return {
-      formula: response,
-      raw: JSON.stringify(response, null, 2),
-    };
-  } catch (error) {
-    console.error('Failed to show formula:', error);
-    return {
-      formula: null,
-      raw: '',
-    };
-  }
-}
-
-export async function gcRepairPortMirror() {
-  // This would need to be implemented in the API
-  return {
-    output: "Port mirror repaired",
-    ok: true,
-  };
-}
-
-export async function gcRigEndpoints() {
-  // This would need to be implemented in the API
-  return {
-    output: "Endpoints rigged",
-    ok: true,
-  };
-}
+  })

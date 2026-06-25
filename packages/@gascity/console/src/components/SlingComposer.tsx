@@ -24,7 +24,7 @@ export function SlingComposer({ onDone }: { onDone?: () => void }) {
 
   const { data: agents } = useQuery({
     queryKey: ["gc", "agents", city],
-    queryFn: () => listAgents({ data: { city } }),
+    queryFn: () => listAgents({ data: { city }}),
     enabled: !!city,
   });
 
@@ -111,7 +111,7 @@ export function SlingComposer({ onDone }: { onDone?: () => void }) {
         <div className="font-mono text-[11px] text-muted-foreground">
           {slingMut.isPending
             ? "slinging…"
-            : slingMut.data?.ok === false
+            : slingMut.data?.error
               ? <span className="text-destructive">{slingMut.data.error}</span>
               : slingMut.data?.ok
                 ? <span className="text-foreground">slung. bead {slingMut.data.bead_id ?? "?"}</span>

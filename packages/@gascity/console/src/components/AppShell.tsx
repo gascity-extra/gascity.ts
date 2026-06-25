@@ -115,12 +115,17 @@ function Header({
   const version = useServerFn(gcVersion);
   const { data } = useQuery({
     queryKey: ["gc", "health"],
-    queryFn: () => health(),
+    queryFn: () => health() as Promise<{
+      reachable: boolean
+      baseUrl: string
+      version: string
+      error?: string
+    }>,
     refetchInterval: 5000,
   });
   const { data: v } = useQuery({
     queryKey: ["gc", "version"],
-    queryFn: () => version(),
+    queryFn: () => version() as Promise<{ version: string }>,
     refetchInterval: 60000,
   });
   const reachable = data?.reachable ?? false;
@@ -197,8 +202,15 @@ function SupervisorPopover({
   version,
 }: {
   onClose: () => void;
-  health: Awaited<ReturnType<typeof gcHealth>> | undefined;
-  version: Awaited<ReturnType<typeof gcVersion>> | undefined;
+  health:
+    | {
+        reachable: boolean
+        baseUrl: string
+        version: string
+        error?: string | undefined
+      }
+    | undefined;
+  version: { version: string } | undefined;
 }) {
   const logs = useServerFn(gcSupervisorLogs);
   const start = useServerFn(gcCityStart);
@@ -212,7 +224,7 @@ function SupervisorPopover({
 
   const { data: log } = useQuery({
     queryKey: ["gc", "supervisor-logs"],
-    queryFn: () => logs({ data: { lines: 200 } }),
+    queryFn: () => logs({ data: { lines: 200 }}),
     refetchInterval: 3000,
   });
 

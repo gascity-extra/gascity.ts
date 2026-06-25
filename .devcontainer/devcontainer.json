@@ -18,6 +18,10 @@
     },
     "./features/cursor": {
       "version": "latest"
+    },
+    "./features/playwright": {
+      "browsers": "chromium",
+      "installMethod": "auto"
     }
   },
   "customizations": {
@@ -33,6 +37,6 @@
   },
   "remoteUser": "vscode",
   "runArgs": ["--tty"],
-  "postCreateCommand": ""
+  "postCreateCommand": "bun install && npx playwright install chromium"
 }
 

@@ -36,7 +36,7 @@ function MailPage() {
 
   const { data: agents } = useQuery({
     queryKey: ["gc", "agents", city],
-    queryFn: () => listAgents({ data: { city } }),
+    queryFn: () => listAgents({ data: { city }}),
     enabled: !!city,
   });
 
@@ -47,7 +47,7 @@ function MailPage() {
 
   const { data: messages, isLoading } = useQuery({
     queryKey: ["gc", "mail", agent],
-    queryFn: () => inbox({ data: { agent } }),
+    queryFn: () => inbox({ data: { agent }}),
     enabled: !!agent,
     refetchInterval: 5000,
   });
@@ -142,7 +142,7 @@ function MailPage() {
               <span className="font-mono text-[11px] text-muted-foreground">
                 {sendMut.isPending
                   ? "sending…"
-                  : sendMut.data?.ok === false
+                  : sendMut.data?.error
                     ? <span className="text-destructive">{sendMut.data.error}</span>
                     : sendMut.data?.ok
                       ? `sent ${sendMut.data.id ?? ""}`

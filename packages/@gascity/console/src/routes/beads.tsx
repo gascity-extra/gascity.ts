@@ -23,12 +23,12 @@ function BeadsPage() {
   const { data, isLoading } = useQuery({
     queryKey: ["gc", "beads", filter],
     queryFn: () =>
-      list({ data: { status: filter === "all" ? undefined : filter } }),
+      list({ data: { status: filter === "all" ? undefined : filter }}),
     refetchInterval: 4000,
   });
 
   const closeMut = useMutation({
-    mutationFn: (id: string) => close({ data: { id } }),
+    mutationFn: (id: string) => close({ data: { id }}),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["gc", "beads"] }),
   });
 

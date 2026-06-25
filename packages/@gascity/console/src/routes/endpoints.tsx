@@ -33,20 +33,22 @@ function EndpointsPage() {
 
   const { data: state } = useQuery({
     queryKey: ["gc", "dolt", city?.path],
-    queryFn: () => dolt({ data: { cityPath: city!.path } }),
+    queryFn: () => dolt({ data: { cityPath: city!.path }}),
     enabled: !!city?.path,
     refetchInterval: 5000,
   });
 
-  const { data: endpoints } = useQuery({
+  const { data: rigsResult } = useQuery({
     queryKey: ["gc", "rigs", city?.path, state?.port],
     queryFn: () =>
-      rigs({
-        data: { cityPath: city!.path, managedPort: state?.port ?? 0 },
-      }),
+      rigs({ data: {
+        cityPath: city!.path,
+        managedPort: state?.port ?? 0,
+      }}),
     enabled: !!city?.path && !!state?.port,
     refetchInterval: 5000,
   });
+  const endpoints = rigsResult?.endpoints ?? [];
 
   const repairMut = useMutation({
     mutationFn: (vars: { rigPath: string; port: number }) =>

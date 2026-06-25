@@ -29,25 +29,25 @@ function FormulaDetail() {
 
   const { data: detail, isLoading } = useQuery({
     queryKey: ["gc", "formula", name],
-    queryFn: () => show({ data: { name } }),
+    queryFn: () => show({ data: { name }}),
   });
 
   const { data: runtime } = useQuery({
     queryKey: ["gc", "formula", name, "status"],
-    queryFn: () => status({ data: { name } }),
+    queryFn: () => status({ data: { name }}),
     enabled: live,
     refetchInterval: 2000,
   });
 
   const runMut = useMutation({
-    mutationFn: () => run({ data: { name } }),
+    mutationFn: () => run({ data: { name }}),
     onSuccess: () => {
       setLive(true);
       qc.invalidateQueries({ queryKey: ["gc", "formula", name, "status"] });
     },
   });
 
-  const steps = mergeSteps(detail?.formula?.steps, runtime);
+  const steps = mergeSteps(detail?.formula?.steps, runtime?.steps);
 
   return (
     <AppShell>

@@ -50,7 +50,7 @@ function PacksPage() {
   });
 
   const unregisterMut = useMutation({
-    mutationFn: (n: string) => unregister({ data: { name: n } }),
+    mutationFn: (n: string) => unregister({ data: { name: n }}),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["gc", "packs"] }),
   });
 

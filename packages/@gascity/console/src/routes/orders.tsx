@@ -34,12 +34,12 @@ function OrdersPage() {
 
   const { data: detail } = useQuery({
     queryKey: ["gc", "order", selected],
-    queryFn: () => show({ data: { name: selected! } }),
+    queryFn: () => show({ data: { name: selected! }}),
     enabled: !!selected,
   });
 
   const runMut = useMutation({
-    mutationFn: (name: string) => run({ data: { name } }),
+    mutationFn: (name: string) => run({ data: { name }}),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["gc", "orders"] }),
   });
 

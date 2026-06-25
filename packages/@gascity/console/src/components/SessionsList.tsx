@@ -28,12 +28,12 @@ export function SessionsList() {
 
   const { data, isLoading, error } = useQuery({
     queryKey: ["gc", "sessions"],
-    queryFn: () => list({ data: {} }),
+    queryFn: () => list(),
     refetchInterval: 2000,
   });
 
   const resetMut = useMutation({
-    mutationFn: (name: string) => reset({ data: { name } }),
+    mutationFn: (name: string) => reset({ data: { name }}),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["gc", "sessions"] }),
   });
 
@@ -109,7 +109,7 @@ export function SessionsList() {
                   <button
                     onClick={() => {
                       const msg = window.prompt(`nudge ${s.name}:`);
-                      if (msg) nudge({ data: { name: s.name, message: msg } });
+                      if (msg) nudge({ data: { name: s.name, message: msg }});
                     }}
                     className="rounded border border-border px-2 py-0.5 font-mono text-[11px] text-muted-foreground hover:text-foreground"
                   >

@@ -194,7 +194,7 @@ function PeekDrawer({ name, onClose }: { name: string; onClose: () => void }) {
   const peek = useServerFn(gcSessionPeek);
   const { data, isLoading } = useQuery({
     queryKey: ["gc", "peek", name],
-    queryFn: () => peek({ data: { name, lines: 200 } }),
+    queryFn: () => peek({ data: { name, lines: 200 }}),
     refetchInterval: 1500,
   });
   return (

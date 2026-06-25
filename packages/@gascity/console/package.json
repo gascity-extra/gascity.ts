@@ -4,18 +4,18 @@
   "sideEffects": false,
   "type": "module",
   "scripts": {
-    "dev": "tsdown --watch",
-    "build": "tsdown",
-    "preview": "tsdown serve",
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
     "typecheck": "tsc --noEmit",
     "test": "vitest",
     "test:e2e": "playwright test"
   },
   "dependencies": {
-    "@gascity/client": "workspace:*",
-    "@gascity/sdk": "workspace:*",
     "@fontsource-variable/geist-mono": "^5.2.8",
     "@fontsource/inter": "^5.2.8",
+    "@gascity/client": "workspace:*",
+    "@gascity/sdk": "workspace:*",
     "@hookform/resolvers": "^5.4.0",
     "@radix-ui/react-accordion": "^1.2.14",
     "@radix-ui/react-alert-dialog": "^1.1.17",
@@ -47,7 +47,6 @@
     "@tanstack/react-query": "^5.101.0",
     "@tanstack/react-router": "^1.170.16",
     "@tanstack/react-start": "^1.168.26",
-    "@tanstack/router-plugin": "^1.168.18",
     "@xterm/addon-fit": "^0.11.0",
     "@xterm/addon-web-links": "^0.12.0",
     "@xterm/xterm": "^6.0.0",
@@ -72,5 +71,9 @@
     "vaul": "^1.1.2",
     "vite-tsconfig-paths": "^6.1.1",
     "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@tanstack/router-plugin": "^1.168.18",
+    "@vitejs/plugin-react": "^4.7.0"
   }
 }
