@@ -8,17 +8,17 @@
       "installOhMyZsh": true,
       "upgradePackages": true
     },
-    "ghcr.io/devcontainers/features/node:1": {
+    "ghcr.io/devcontainers/features/node:2.1.0": {
       "version": "24",
       "installGlibc": true
     },
+    "./features/bun": {},
     "./features/devin": {
       "version": "latest"
     },
     "./features/cursor": {
       "version": "latest"
-    },
-    "./features/sacp-conductor": {}
+    }
   },
   "customizations": {
     "vscode": {
@@ -33,6 +33,6 @@
   },
   "remoteUser": "vscode",
   "runArgs": ["--tty"],
-  "postCreateCommand": "curl -fsSL https://bun.sh/install | bash && for rc in .bashrc .zshrc; do [ -f \"$HOME/$rc\" ] && (echo 'export BUN_INSTALL=\"$HOME/.bun\"' >> \"$HOME/$rc\" && echo 'export PATH=\"$BUN_INSTALL/bin:$PATH\"' >> \"$HOME/$rc\"); done || true"
+  "postCreateCommand": ""
 }
 
