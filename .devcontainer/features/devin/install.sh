@@ -40,7 +40,7 @@ run_upstream_script() {
     # container build. The two patterns above match both variable-form and
     # literal-form invocations; if the upstream script changes shape we fail
     # loudly here instead of silently deadlocking the build.
-    if grep -Eq '(^|[^A-Za-z_])(devin|\$COMPILED_BIN_NAME)[[:space:]]+setup' "$patched_script"; then
+    if grep -Eq '\$COMPILED_BIN_NAME"[[:space:]]+setup|(^|[^A-Za-z_])devin[[:space:]]+setup([[:space:]]|$)' "$patched_script"; then
         echo "Error: failed to strip interactive 'devin setup' from upstream installer" >&2
         echo "Upstream script may have changed; please update run_upstream_script()." >&2
         rm -f "$patched_script"
@@ -60,7 +60,7 @@ manifest_field() {
     local manifest="$1" target="$2" field="$3"
     if command -v jq >/dev/null 2>&1; then
         printf '%s' "$manifest" | jq -r --arg t "$target" --arg f "$field" \
-            '.[$t][$f] // empty'
+            '.platforms[$t][$f] // empty'
     else
         printf '%s' "$manifest" \
             | grep -o "\"$target\"[[:space:]]*:[[:space:]]*{[^}]*}" \
@@ -86,7 +86,7 @@ case "$INSTALL_METHOD" in
         # upstream installer entirely (and therefore the interactive setup
         # wizard). Honors $VERSION when set to a concrete release tag
         # (e.g. "2026.8.18"); falls back to "current" otherwise.
-        if [ "$VERSION" = "latest" ] || [ -z "$VERSION" ]; then
+        if [[ "$VERSION" == "latest" || -z "$VERSION" ]]; then
             VERSION_PATH="current"
         else
             VERSION_PATH="$VERSION"
@@ -106,39 +106,41 @@ case "$INSTALL_METHOD" in
         esac
 
         BUNDLE_URL=$(manifest_field "$MANIFEST" "$TARGET" "url")
-        if [ -z "$BUNDLE_URL" ]; then
+        if [[ -z "$BUNDLE_URL" ]]; then
             echo "Error: no bundle URL in manifest for $TARGET" >&2
             exit 1
         fi
 
         EXPECTED_SHA=$(manifest_field "$MANIFEST" "$TARGET" "sha256")
+        if [[ -z "$EXPECTED_SHA" ]]; then
+            echo "Error: no checksum in manifest for $TARGET" >&2
+            exit 1
+        fi
 
         TMP_TARBALL="$(mktemp "${TMPDIR:-/tmp}/devin.XXXXXX.tar.gz")"
         TMP_EXTRACT="$(mktemp -d "${TMPDIR:-/tmp}/devin-extract.XXXXXX")"
 
         curl -fSL "$BUNDLE_URL" -o "$TMP_TARBALL"
 
-        if [ -n "$EXPECTED_SHA" ]; then
-            ACTUAL_SHA=$(sha256sum "$TMP_TARBALL" | cut -d' ' -f1)
-            if [ "$ACTUAL_SHA" != "$EXPECTED_SHA" ]; then
-                echo "Error: checksum mismatch for Devin CLI tarball" >&2
-                echo "Expected: $EXPECTED_SHA" >&2
-                echo "Got:      $ACTUAL_SHA" >&2
-                rm -rf "$TMP_TARBALL" "$TMP_EXTRACT"
-                exit 1
-            fi
+        ACTUAL_SHA=$(sha256sum "$TMP_TARBALL" | cut -d' ' -f1)
+        if [[ "$ACTUAL_SHA" != "$EXPECTED_SHA" ]]; then
+            echo "Error: checksum mismatch for Devin CLI tarball" >&2
+            echo "Expected: $EXPECTED_SHA" >&2
+            echo "Got:      $ACTUAL_SHA" >&2
+            rm -rf "$TMP_TARBALL" "$TMP_EXTRACT"
+            exit 1
         fi
 
         mkdir -p "$HOME/.local/bin"
         tar xzf "$TMP_TARBALL" -C "$TMP_EXTRACT"
         # Tarball layout: devin/bin/devin (and friends). Find the actual binary.
-        if [ -x "$TMP_EXTRACT/devin/bin/devin" ]; then
+        if [[ -x "$TMP_EXTRACT/devin/bin/devin" ]]; then
             cp "$TMP_EXTRACT/devin/bin/devin" "$DEVIN_BIN"
-        elif [ -x "$TMP_EXTRACT/bin/devin" ]; then
+        elif [[ -x "$TMP_EXTRACT/bin/devin" ]]; then
             cp "$TMP_EXTRACT/bin/devin" "$DEVIN_BIN"
         else
             BIN_PATH=$(find "$TMP_EXTRACT" -type f -name devin -executable | head -n1)
-            if [ -z "$BIN_PATH" ]; then
+            if [[ -z "$BIN_PATH" ]]; then
                 echo "Error: could not locate devin binary in extracted tarball" >&2
                 rm -rf "$TMP_TARBALL" "$TMP_EXTRACT"
                 exit 1
@@ -160,7 +162,7 @@ esac
 # already creates a symlink at $DEVIN_BIN; the binary path writes the file
 # directly. Either way, we want a copy on /usr/local/bin so the CLI is
 # available system-wide in the container.
-if [ ! -e "$DEVIN_BIN" ]; then
+if [[ ! -e "$DEVIN_BIN" ]]; then
     echo "Devin CLI installation failed: binary not found at $DEVIN_BIN" >&2
     exit 1
 fi
@@ -176,7 +178,7 @@ set +e
 if command -v devin >/dev/null 2>&1; then
     OUT=$(devin --version 2>&1)
     RC=$?
-    if [ $RC -eq 0 ]; then
+    if [[ $RC -eq 0 ]]; then
         echo "Devin CLI version: ${OUT}"
     else
         echo "Devin CLI: version check skipped (exit ${RC})"
