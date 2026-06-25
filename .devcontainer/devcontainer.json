@@ -9,7 +9,8 @@
       "upgradePackages": true
     },
     "ghcr.io/devcontainers/features/node:1": {
-      "version": "24"
+      "version": "24",
+      "installGlibc": true
     },
     "ghcr.io/devcontainers/features/bun:1": {},
     "./features/devin": {
@@ -33,5 +34,6 @@
   },
   "remoteUser": "vscode",
   "runArgs": ["--tty"],
-  "postCreateCommand": "echo 'Devcontainer ready.'"
+  "postCreateCommand": "curl -fsSL https://bun.sh/install | bash && echo 'export BUN_INSTALL=\"$HOME/.bun\"' >> ~/.bashrc && echo 'export PATH=\"$BUN_INSTALL/bin:$PATH\"' >> ~/.bashrc"
 }
+
