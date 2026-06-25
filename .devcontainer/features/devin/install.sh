@@ -35,10 +35,38 @@ run_upstream_script() {
         "$script_path" > "$patched_script"
     chmod +x "$patched_script"
 
+    # Guard: if our sed didn't actually strip a setup invocation, refuse to
+    # run the script rather than risk the interactive wizard hanging the
+    # container build. The two patterns above match both variable-form and
+    # literal-form invocations; if the upstream script changes shape we fail
+    # loudly here instead of silently deadlocking the build.
+    if grep -Eq '(^|[^A-Za-z_])(devin|\$COMPILED_BIN_NAME)[[:space:]]+setup' "$patched_script"; then
+        echo "Error: failed to strip interactive 'devin setup' from upstream installer" >&2
+        echo "Upstream script may have changed; please update run_upstream_script()." >&2
+        rm -f "$patched_script"
+        return 1
+    fi
+
     bash "$patched_script"
     local rc=$?
     rm -f "$patched_script"
     return $rc
+}
+
+# Extract a string field for $TARGET from the manifest JSON. Prefers jq when
+# available (robust against pretty-printing / whitespace); falls back to a
+# grep/sed scan for minimal base images that don't ship jq.
+manifest_field() {
+    local manifest="$1" target="$2" field="$3"
+    if command -v jq >/dev/null 2>&1; then
+        printf '%s' "$manifest" | jq -r --arg t "$target" --arg f "$field" \
+            '.[$t][$f] // empty'
+    else
+        printf '%s' "$manifest" \
+            | grep -o "\"$target\"[[:space:]]*:[[:space:]]*{[^}]*}" \
+            | grep -o "\"$field\"[[:space:]]*:[[:space:]]*\"[^\"]*\"" \
+            | sed "s/.*\"\\([^\"]*\\)\"$/\\1/"
+    fi
 }
 
 case "$INSTALL_METHOD" in
@@ -77,19 +105,13 @@ case "$INSTALL_METHOD" in
                 ;;
         esac
 
-        BUNDLE_URL=$(echo "$MANIFEST" \
-            | grep -o "\"$TARGET\"[[:space:]]*:[[:space:]]*{[^}]*}" \
-            | grep -o '"url"[[:space:]]*:[[:space:]]*"[^"]*"' \
-            | sed 's/.*"\([^"]*\)"$/\1/')
+        BUNDLE_URL=$(manifest_field "$MANIFEST" "$TARGET" "url")
         if [ -z "$BUNDLE_URL" ]; then
             echo "Error: no bundle URL in manifest for $TARGET" >&2
             exit 1
         fi
 
-        EXPECTED_SHA=$(echo "$MANIFEST" \
-            | grep -o "\"$TARGET\"[[:space:]]*:[[:space:]]*{[^}]*}" \
-            | grep -o '"sha256"[[:space:]]*:[[:space:]]*"[^"]*"' \
-            | sed 's/.*"\([^"]*\)"$/\1/')
+        EXPECTED_SHA=$(manifest_field "$MANIFEST" "$TARGET" "sha256")
 
         TMP_TARBALL="$(mktemp "${TMPDIR:-/tmp}/devin.XXXXXX.tar.gz")"
         TMP_EXTRACT="$(mktemp -d "${TMPDIR:-/tmp}/devin-extract.XXXXXX")"

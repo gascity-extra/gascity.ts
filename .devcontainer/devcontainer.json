@@ -34,6 +34,6 @@
   },
   "remoteUser": "vscode",
   "runArgs": ["--tty"],
-  "postCreateCommand": "curl -fsSL https://bun.sh/install | bash && echo 'export BUN_INSTALL=\"$HOME/.bun\"' >> ~/.bashrc && echo 'export PATH=\"$BUN_INSTALL/bin:$PATH\"' >> ~/.bashrc"
+  "postCreateCommand": "curl -fsSL https://bun.sh/install | bash && for rc in .bashrc .zshrc; do [ -f \"$HOME/$rc\" ] && (echo 'export BUN_INSTALL=\"$HOME/.bun\"' >> \"$HOME/$rc\" && echo 'export PATH=\"$BUN_INSTALL/bin:$PATH\"' >> \"$HOME/$rc\"); done || true"
 }
 
