@@ -1,14 +1,14 @@
 import { test, expect } from '@playwright/test';
 
 test.describe('Beads Tests', () => {
-  test.beforeEach(async ({ page }) => {
-    await page.goto('http://localhost:8080');
+  test.beforeEach(async ({ page, baseURL }) => {
+    await page.goto(`${baseURL}/`);
     await page.waitForLoadState('domcontentloaded');
   });
 
-  test('navigate to beads page', async ({ page }) => {
+  test('navigate to beads page', async ({ page, baseURL }) => {
     // Navigate to beads page
-    await page.goto('http://localhost:8080/beads');
+    await page.goto(`${baseURL}/beads`);
     await page.waitForLoadState('domcontentloaded');
     
     // Check that we're on beads page
@@ -19,9 +19,9 @@ test.describe('Beads Tests', () => {
     await expect(body).toBeVisible();
   });
 
-  test('beads page displays filter buttons', async ({ page }) => {
+  test('beads page displays filter buttons', async ({ page, baseURL }) => {
     // Navigate to beads page
-    await page.goto('http://localhost:8080/beads');
+    await page.goto(`${baseURL}/beads`);
     await page.waitForLoadState('domcontentloaded');
     
     // Look for filter buttons
@@ -41,9 +41,9 @@ test.describe('Beads Tests', () => {
     expect(visibleCount).toBeGreaterThan(0);
   });
 
-  test('can switch between bead filters', async ({ page }) => {
+  test('can switch between bead filters', async ({ page, baseURL }) => {
     // Navigate to beads page
-    await page.goto('http://localhost:8080/beads');
+    await page.goto(`${baseURL}/beads`);
     await page.waitForLoadState('domcontentloaded');
     
     // Click on different filter buttons
@@ -63,9 +63,9 @@ test.describe('Beads Tests', () => {
     await expect(page).toHaveURL(/\/beads/);
   });
 
-  test('beads page has close button for open beads', async ({ page }) => {
+  test('beads page has close button for open beads', async ({ page, baseURL }) => {
     // Navigate to beads page
-    await page.goto('http://localhost:8080/beads');
+    await page.goto(`${baseURL}/beads`);
     await page.waitForLoadState('domcontentloaded');
     
     // Look for close button (only visible for non-closed beads)

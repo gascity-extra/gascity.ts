@@ -1,20 +1,28 @@
 import { test, expect } from '@playwright/test';
-import { E2EActions } from '../lib/actions';
+import { E2EActions, isGcBackendReachable } from '../lib/actions';
 
 /**
  * Main scenario: Task creation and automatic processing
  * This is the primary end-to-end workflow for the Gas City Console
+ *
+ * Requires a live GC supervisor; skipped when the backend is unreachable.
  */
 
 test.describe('Task Creation and Processing Workflow', () => {
   let actions: E2EActions;
 
-  test.beforeEach(async ({ page }) => {
+  test.beforeAll(async () => {
+    if (!(await isGcBackendReachable())) {
+      test.skip(true, 'GC supervisor unreachable; scenario tests require a live backend.');
+    }
+  });
+
+  test.beforeEach(async ({ page, baseURL }) => {
     actions = new E2EActions(page);
     await actions.navigateToHome();
   });
 
-  test('complete workflow: sling task → bead created → session started → task processed', async ({ page }) => {
+  test('complete workflow: sling task → bead created → session started → task processed', async ({ page, baseURL }) => {
     // Step 1: Sling a task
     await test.step('Sling a new task', async () => {
       await actions.slingTask(
@@ -43,7 +51,7 @@ test.describe('Task Creation and Processing Workflow', () => {
         const firstBead = beads[0];
         const beadText = await firstBead.textContent();
         const beadId = beadText?.match(/\d+/)?.[0] || '';
-        
+
         if (beadId) {
           const beadClosed = await actions.waitForBeadStatus(beadId, 'closed', 120000);
           console.log(`Bead ${beadId} closed: ${beadClosed}`);
@@ -62,7 +70,7 @@ test.describe('Task Creation and Processing Workflow', () => {
     });
   });
 
-  test('workflow: sling task → nudge session → verify response', async ({ page }) => {
+  test('workflow: sling task → nudge session → verify response', async ({ page, baseURL }) => {
     // Step 1: Sling a task
     await test.step('Sling a new task', async () => {
       await actions.slingTask(
@@ -82,11 +90,11 @@ test.describe('Task Creation and Processing Workflow', () => {
     await test.step('Get active session', async () => {
       const sessions = await actions.getSessionList();
       expect(sessions.length).toBeGreaterThan(0);
-      
+
       const firstSession = sessions[0];
       const sessionText = await firstSession.textContent();
       const sessionName = sessionText?.split('\n')[0] || '';
-      
+
       // Step 4: Nudge the session
       await test.step('Nudge the session', async () => {
         await actions.nudgeSession(sessionName, 'Check progress');
@@ -95,7 +103,7 @@ test.describe('Task Creation and Processing Workflow', () => {
     });
   });
 
-  test('workflow: sling task → reset session → verify cleanup', async ({ page }) => {
+  test('workflow: sling task → reset session → verify cleanup', async ({ page, baseURL }) => {
     // Step 1: Sling a task
     await test.step('Sling a new task', async () => {
       await actions.slingTask(
@@ -118,14 +126,14 @@ test.describe('Task Creation and Processing Workflow', () => {
         const firstSession = sessions[0];
         const sessionText = await firstSession.textContent();
         const sessionName = sessionText?.split('\n')[0] || '';
-        
+
         await actions.resetSession(sessionName);
         await page.waitForTimeout(2000);
       }
     });
   });
 
-  test('workflow: sling task → attach to session → verify terminal', async ({ page }) => {
+  test('workflow: sling task → attach to session → verify terminal', async ({ page, baseURL }) => {
     // Step 1: Sling a task
     await test.step('Sling a new task', async () => {
       await actions.slingTask(
@@ -145,20 +153,20 @@ test.describe('Task Creation and Processing Workflow', () => {
     await test.step('Attach to session', async () => {
       const attachButton = page.getByText('attach');
       const count = await attachButton.count();
-      
+
       if (count > 0) {
         await attachButton.first().click();
         await page.waitForLoadState('domcontentloaded');
-        
+
         // Verify we're on session detail page
         await expect(page).toHaveURL(/\/sessions\/.+/);
-        
+
         // Look for peek button
         const peekButton = page.getByText('peek');
         if (await peekButton.count() > 0) {
           await peekButton.click();
           await page.waitForTimeout(1000);
-          
+
           // Verify peek drawer is visible
           const pageContent = await page.content();
           expect(pageContent.length).toBeGreaterThan(100);

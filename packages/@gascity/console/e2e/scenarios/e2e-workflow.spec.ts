@@ -1,31 +1,42 @@
 import { test, expect } from '@playwright/test';
-import { E2EActions } from '../lib/actions';
+import { E2EActions, isGcBackendReachable } from '../lib/actions';
 
 /**
  * Complete End-to-End Workflow Scenarios
  * Main target: Task creation → Automatic processing → Completion verification
+ *
+ * These tests require a live GC supervisor. `beforeAll` probes the backend
+ * and skips the suite when it isn't reachable — the playwright config
+ * promises that scenario tests "are skipped if the backend isn't reachable",
+ * so we honor that contract here.
  */
 
 test.describe('Complete E2E Workflow', () => {
   let actions: E2EActions;
 
-  test.beforeEach(async ({ page }) => {
+  test.beforeAll(async () => {
+    if (!(await isGcBackendReachable())) {
+      test.skip(true, 'GC supervisor unreachable; scenario tests require a live backend.');
+    }
+  });
+
+  test.beforeEach(async ({ page, baseURL }) => {
     actions = new E2EActions(page);
     await actions.navigateToHome();
   });
 
-  test('MAIN TARGET: Sling task → Verify automatic processing → Confirm completion', async ({ page }) => {
+  test('MAIN TARGET: Sling task → Verify automatic processing → Confirm completion', async ({ page, baseURL }) => {
     console.log('=== MAIN TARGET TEST: Task Creation and Automatic Processing ===');
-    
+
     // Step 0: Ensure an active city exists
     console.log('Step 0: Checking for active cities...');
     await actions.navigateTo('/cities');
     await page.waitForTimeout(2000);
-    
+
     const pageContent = await page.content();
     const hasCities = !pageContent.toLowerCase().includes('no cities');
     const hasActiveCity = pageContent.toLowerCase().includes('active');
-    
+
     if (!hasCities) {
       console.log('No cities found, creating one...');
       await actions.createCity('/tmp/e2e-test-city', ['gascity']);
@@ -41,7 +52,7 @@ test.describe('Complete E2E Workflow', () => {
     } else {
       console.log('Active city exists, proceeding...');
     }
-    
+
     // Step 1: Create task via CLI (bypasses UI issues)
     console.log('Step 1: Slinging task via CLI...');
     let result;
@@ -66,9 +77,9 @@ test.describe('Complete E2E Workflow', () => {
     console.log('=== MAIN TARGET TEST COMPLETED ===');
   });
 
-  test('workflow: Task creation → Nudge intervention → Resume processing', async ({ page }) => {
+  test('workflow: Task creation → Nudge intervention → Resume processing', async ({ page, baseURL }) => {
     console.log('=== TEST: Task with Nudge Intervention ===');
-    
+
     // Create a longer-running task
     await actions.slingTask(
       'default',
@@ -87,7 +98,7 @@ test.describe('Complete E2E Workflow', () => {
       const firstSession = sessions[0];
       const sessionText = await firstSession.textContent();
       const sessionName = sessionText?.split('\n')[0] || '';
-      
+
       console.log(`Nudging session: ${sessionName}`);
       await actions.nudgeSession(sessionName, 'Check progress');
       await page.waitForTimeout(2000);
@@ -103,9 +114,9 @@ test.describe('Complete E2E Workflow', () => {
     }
   });
 
-  test('workflow: Multiple sequential tasks → Verify queue processing', async ({ page }) => {
+  test('workflow: Multiple sequential tasks → Verify queue processing', async ({ page, baseURL }) => {
     console.log('=== TEST: Sequential Task Queue ===');
-    
+
     const tasks = [
       'Queue Task 1: Create file queue-1.txt',
       'Queue Task 2: Create file queue-2.txt',
@@ -130,9 +141,9 @@ test.describe('Complete E2E Workflow', () => {
     console.log(`Beads in progress: ${beads.length}`);
   });
 
-  test('workflow: Task verification → Check output/results', async ({ page }) => {
+  test('workflow: Task verification → Check output/results', async ({ page, baseURL }) => {
     console.log('=== TEST: Task Result Verification ===');
-    
+
     // Create a task with verifiable output
     await actions.slingTask(
       'default',
@@ -150,11 +161,11 @@ test.describe('Complete E2E Workflow', () => {
       const firstBead = beads[0];
       const beadText = await firstBead.textContent();
       const beadId = beadText?.match(/\d+/)?.[0] || '';
-      
+
       if (beadId) {
         await actions.waitForBeadStatus(beadId, 'closed', 60000);
         console.log('✓ Task completed');
-        
+
         // In a real scenario, we would verify the file exists
         // For now, we verify the bead closed successfully
         const finalBeads = await actions.getBeadList('closed');
@@ -163,9 +174,9 @@ test.describe('Complete E2E Workflow', () => {
     }
   });
 
-  test('workflow: Supervisor restart during task → Verify recovery', async ({ page }) => {
+  test('workflow: Supervisor restart during task → Verify recovery', async ({ page, baseURL }) => {
     console.log('=== TEST: Supervisor Recovery ===');
-    
+
     // Start a task
     await actions.slingTask(
       'default',

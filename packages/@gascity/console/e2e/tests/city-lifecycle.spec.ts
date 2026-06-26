@@ -1,13 +1,13 @@
 import { test, expect } from '@playwright/test';
 
 test.describe('City Lifecycle Tests', () => {
-  test.beforeEach(async ({ page }) => {
+  test.beforeEach(async ({ page, baseURL }) => {
     // Navigate to the console UI
-    await page.goto('http://localhost:8080/cities');
+    await page.goto(`${baseURL}/cities`);
     await page.waitForLoadState('domcontentloaded');
   });
 
-  test('create city dialog opens', async ({ page }) => {
+  test('create city dialog opens', async ({ page, baseURL }) => {
     // Click on "+ new city" button
     const newCityButton = page.getByText('+ new city');
     await newCityButton.click();
@@ -24,7 +24,7 @@ test.describe('City Lifecycle Tests', () => {
     await page.waitForTimeout(500);
   });
 
-  test('create city with path and packs', async ({ page }) => {
+  test('create city with path and packs', async ({ page, baseURL }) => {
     // Click on "+ new city" button
     const newCityButton = page.getByText('+ new city');
     await newCityButton.click();
@@ -49,7 +49,7 @@ test.describe('City Lifecycle Tests', () => {
     await expect(page).toHaveURL(/\/cities/);
   });
 
-  test('create city without packs', async ({ page }) => {
+  test('create city without packs', async ({ page, baseURL }) => {
     // Click on "+ new city" button
     const newCityButton = page.getByText('+ new city');
     await newCityButton.click();
@@ -81,7 +81,7 @@ test.describe('City Lifecycle Tests', () => {
     await expect(page).toHaveURL(/\/cities/);
   });
 
-  test('create city with single pack', async ({ page }) => {
+  test('create city with single pack', async ({ page, baseURL }) => {
     // Click on "+ new city" button
     const newCityButton = page.getByText('+ new city');
     await newCityButton.click();
@@ -120,7 +120,7 @@ test.describe('City Lifecycle Tests', () => {
     await expect(page).toHaveURL(/\/cities/);
   });
 
-  test('create city with multiple packs', async ({ page }) => {
+  test('create city with multiple packs', async ({ page, baseURL }) => {
     // Click on "+ new city" button
     const newCityButton = page.getByText('+ new city');
     await newCityButton.click();
@@ -153,7 +153,7 @@ test.describe('City Lifecycle Tests', () => {
     await expect(page).toHaveURL(/\/cities/);
   });
 
-  test('can stop city via gc stop button', async ({ page }) => {
+  test('can stop city via gc stop button', async ({ page, baseURL }) => {
     // Look for gc stop button
     const stopButton = page.getByText('gc stop');
     if (await stopButton.count() > 0) {

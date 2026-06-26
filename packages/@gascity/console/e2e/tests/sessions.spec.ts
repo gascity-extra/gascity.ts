@@ -1,92 +1,74 @@
 import { test, expect } from '@playwright/test';
 
 test.describe('Sessions Tests', () => {
-  test.beforeEach(async ({ page }) => {
-    await page.goto('http://localhost:8080');
+  test.beforeEach(async ({ page, baseURL }) => {
+    await page.goto(`${baseURL}/`);
     await page.waitForLoadState('domcontentloaded');
   });
 
-  test('sessions page displays session list', async ({ page }) => {
-    // Navigate to sessions page
-    await page.goto('http://localhost:8080');
+  test('sessions page displays session list', async ({ page, baseURL }) => {
+    await page.goto(`${baseURL}/`);
     await page.waitForLoadState('domcontentloaded');
-    
-    // Check that we're on sessions page
+
     await expect(page).toHaveURL(/\/$/);
-    
-    // Check that the page has content
+
     const body = page.locator('body');
     await expect(body).toBeVisible();
-    
-    // Look for sessions-related content
+
     const pageContent = await page.content();
     expect(pageContent.toLowerCase()).toMatch(/sessions/);
   });
 
-  test('can attach to session', async ({ page }) => {
-    // Navigate to sessions page
-    await page.goto('http://localhost:8080');
+  test('can attach to session', async ({ page, baseURL }) => {
+    await page.goto(`${baseURL}/`);
     await page.waitForLoadState('domcontentloaded');
-    
-    // Look for attach button (if sessions exist)
-    const attachButton = page.getByText('attach');
-    const count = await attachButton.count();
-    
+
+    // Scope "attach" to anchor tags inside the main list area. The previous
+    // form of this test used `getByText('attach')` which can transiently
+    // match the session row before the data settles, causing a race where
+    // the click goes nowhere.
+    const attachLinks = page.locator('a[href^="/sessions/"]');
+    const count = await attachLinks.count();
+
     if (count > 0) {
-      // Click on first attach button
-      await attachButton.first().click();
-      
-      // Wait for navigation to session detail
-      await page.waitForTimeout(1000);
-      
-      // Verify we're on a session detail page
+      const href = await attachLinks.first().getAttribute('href');
+      expect(href).toMatch(/^\/sessions\/.+/);
+      await attachLinks.first().click();
+      await page.waitForURL(/\/sessions\/.+/, { timeout: 5000 });
       await expect(page).toHaveURL(/\/sessions\/.+/);
     } else {
-      // No sessions available
       console.log('No sessions to attach to');
     }
   });
 
-  test('can nudge session', async ({ page }) => {
-    // Navigate to sessions page
-    await page.goto('http://localhost:8080');
+  test('can nudge session', async ({ page, baseURL }) => {
+    await page.goto(`${baseURL}/`);
     await page.waitForLoadState('domcontentloaded');
-    
-    // Look for nudge button (if sessions exist)
-    const nudgeButton = page.getByText('nudge');
-    const count = await nudgeButton.count();
-    
+
+    // Nudge buttons are scoped to the session rows. Without sessions,
+    // there's nothing to nudge — skip.
+    const nudgeButtons = page.getByRole('button', { name: /^nudge$/i });
+    const count = await nudgeButtons.count();
+
     if (count > 0) {
-      // Click on first nudge button
-      await nudgeButton.first().click();
-      
-      // Wait for prompt (browser handles prompt automatically in tests)
+      await nudgeButtons.first().click();
       await page.waitForTimeout(500);
-      
-      // Verify we're still on sessions page
       await expect(page).toHaveURL(/\/$/);
     } else {
-      // No sessions available
       console.log('No sessions to nudge');
     }
   });
 
-  test('can reset session', async ({ page }) => {
-    // Navigate to sessions page
-    await page.goto('http://localhost:8080');
+  test('can reset session', async ({ page, baseURL }) => {
+    await page.goto(`${baseURL}/`);
     await page.waitForLoadState('domcontentloaded');
-    
-    // Look for reset button (if sessions exist)
-    const resetButton = page.getByText('reset');
-    const count = await resetButton.count();
-    
+
+    const resetButtons = page.getByRole('button', { name: /^reset$/i });
+    const count = await resetButtons.count();
+
     if (count > 0) {
-      // Click on first reset button
-      // Note: This will show a confirm dialog which we can't easily test in headless mode
-      // So we'll just verify the button exists
-      await expect(resetButton.first()).toBeVisible();
+      await expect(resetButtons.first()).toBeVisible();
     } else {
-      // No sessions available
       console.log('No sessions to reset');
     }
   });

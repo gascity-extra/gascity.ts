@@ -1,14 +1,14 @@
 import { test, expect } from '@playwright/test';
 
 test.describe('Endpoints Tests', () => {
-  test.beforeEach(async ({ page }) => {
-    await page.goto('http://localhost:8080');
+  test.beforeEach(async ({ page, baseURL }) => {
+    await page.goto(`${baseURL}/`);
     await page.waitForLoadState('domcontentloaded');
   });
 
-  test('navigate to endpoints page', async ({ page }) => {
+  test('navigate to endpoints page', async ({ page, baseURL }) => {
     // Navigate to endpoints page
-    await page.goto('http://localhost:8080/endpoints');
+    await page.goto(`${baseURL}/endpoints`);
     await page.waitForLoadState('domcontentloaded');
     
     // Check that we're on endpoints page
@@ -19,9 +19,9 @@ test.describe('Endpoints Tests', () => {
     await expect(body).toBeVisible();
   });
 
-  test('endpoints page displays city selector', async ({ page }) => {
+  test('endpoints page displays city selector', async ({ page, baseURL }) => {
     // Navigate to endpoints page
-    await page.goto('http://localhost:8080/endpoints');
+    await page.goto(`${baseURL}/endpoints`);
     await page.waitForLoadState('domcontentloaded');
     
     // Look for city selector
@@ -34,9 +34,9 @@ test.describe('Endpoints Tests', () => {
     }
   });
 
-  test('endpoints page displays dolt state', async ({ page }) => {
+  test('endpoints page displays dolt state', async ({ page, baseURL }) => {
     // Navigate to endpoints page
-    await page.goto('http://localhost:8080/endpoints');
+    await page.goto(`${baseURL}/endpoints`);
     await page.waitForLoadState('domcontentloaded');
     
     // Look for dolt state information
@@ -44,9 +44,9 @@ test.describe('Endpoints Tests', () => {
     expect(pageContent.toLowerCase()).toMatch(/dolt|endpoints/);
   });
 
-  test('endpoints page displays rig list', async ({ page }) => {
+  test('endpoints page displays rig list', async ({ page, baseURL }) => {
     // Navigate to endpoints page
-    await page.goto('http://localhost:8080/endpoints');
+    await page.goto(`${baseURL}/endpoints`);
     await page.waitForLoadState('domcontentloaded');
     
     // Look for rig-related content

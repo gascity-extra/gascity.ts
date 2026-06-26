@@ -11,7 +11,21 @@
 
 import { createServerFn } from '@tanstack/react-start'
 import { z } from 'zod'
-import { DefaultService } from '@gascity/client'
+import { DefaultService, configureGasCityClient } from '@gascity/client'
+
+// Configure the OpenAPI-generated client once at module load. Without this,
+// `DefaultService.*` calls hit `axios` with an empty `BASE`, which throws
+// `ERR_INVALID_URL` from inside Node and pollutes the dev-server stderr with
+// noisy stack traces. The console routes through the `/gc` catch-all (see
+// `routes/gc.$.ts`) in production; in dev Vite proxies `/gc/*` to the same
+// target. Calling our own server keeps SSR hermetic when the supervisor is
+// offline (we already degrade to empty arrays / default values).
+configureGasCityClient({
+  baseUrl:
+    (typeof process !== 'undefined' && process.env?.GC_API_BASE_URL?.replace(/\/$/, '')) ||
+    'http://127.0.0.1:8372',
+  token: typeof process !== 'undefined' ? process.env?.GC_API_TOKEN : undefined,
+})
 
 const CITY = 'default'
 
@@ -22,6 +36,318 @@ function unwrap<T>(response: Envelope<T>): T | null {
     return null
   }
   return response as T
+}
+
+// --- tmux provider lifecycle -------------------------------------------------
+//
+// These server functions wrap `tmux` to give the console first-class control
+// over the on-disk agent sessions that the WebSocket bridge attaches to. The
+// bridge itself (`/api/pty`) only handles `tmux attach`; create / list / kill
+// happen here so the UI can manage a session lifecycle without shelling out
+// from the browser.
+//
+// SECURITY: the tmux binary and session name are validated against strict
+// allow-lists. The child process is spawned with a minimal, fixed environment
+// (not `process.env`) to avoid leaking secrets to anything that attaches.
+
+const TMUX_BIN_RE = /^[a-zA-Z0-9_./-]+$/
+const SESSION_NAME_RE = /^[a-zA-Z0-9_.-]{1,64}$/
+const SHELL_BIN_RE = /^[a-zA-Z0-9_./-]+$/
+
+function safeTmuxBin(): string {
+  const bin = process.env.TMUX_BIN ?? 'tmux'
+  if (!TMUX_BIN_RE.test(bin)) {
+    throw new Error(`invalid TMUX_BIN env (${bin})`)
+  }
+  return bin
+}
+
+async function runTmux(
+  args: string[],
+  opts: { input?: string; timeoutMs?: number } = {},
+): Promise<{ ok: boolean; stdout: string; stderr: string; code: number }> {
+  const { spawn } = await import('node:child_process')
+  const bin = safeTmuxBin()
+  return await new Promise((resolve) => {
+    const child = spawn(bin, args, {
+      stdio: ['pipe', 'pipe', 'pipe'],
+      env: {
+        TERM: 'dumb',
+        PATH: process.env.PATH ?? '/usr/local/bin:/usr/bin:/bin',
+        HOME: process.env.HOME ?? '/tmp',
+        LANG: process.env.LANG ?? 'C.UTF-8',
+      },
+    })
+    const stdout: Buffer[] = []
+    const stderr: Buffer[] = []
+    let settled = false
+    const timer = setTimeout(() => {
+      if (settled) return
+      settled = true
+      try {
+        child.kill('SIGKILL')
+      } catch {
+        /* ignore */
+      }
+      resolve({
+        ok: false,
+        stdout: Buffer.concat(stdout).toString('utf8'),
+        stderr: `timeout after ${opts.timeoutMs ?? 5000}ms`,
+        code: -1,
+      })
+    }, opts.timeoutMs ?? 5000)
+    child.stdout.on('data', (b: Buffer) => stdout.push(b))
+    child.stderr.on('data', (b: Buffer) => stderr.push(b))
+    child.on('error', (err) => {
+      if (settled) return
+      settled = true
+      clearTimeout(timer)
+      resolve({ ok: false, stdout: '', stderr: err.message, code: -1 })
+    })
+    child.on('close', (code) => {
+      if (settled) return
+      settled = true
+      clearTimeout(timer)
+      const out = Buffer.concat(stdout).toString('utf8')
+      const err = Buffer.concat(stderr).toString('utf8')
+      resolve({ ok: code === 0, stdout: out, stderr: err, code: code ?? -1 })
+    })
+    if (opts.input !== undefined) {
+      child.stdin.end(opts.input)
+    } else {
+      child.stdin.end()
+    }
+  })
+}
+
+export interface TmuxSessionInfo {
+  name: string
+  createdAt?: string
+  attached: boolean
+  windows: number
+  width?: number
+  height?: number
+}
+
+export interface TmuxProviderStatus {
+  available: boolean
+  tmuxBin: string
+  version?: string
+  error?: string
+}
+
+/** Probe whether tmux is on PATH and parseable. */
+export const gcTmuxStatus = createServerFn({ method: 'GET' }).handler(async () => {
+  const status: TmuxProviderStatus = {
+    available: false,
+    tmuxBin: safeTmuxBin(),
+  }
+  try {
+    const r = await runTmux(['-V'], { timeoutMs: 2000 })
+    if (r.ok) {
+      status.available = true
+      status.version = r.stdout.trim() || r.stderr.trim()
+    } else {
+      status.error = r.stderr || `tmux exited with code ${r.code}`
+    }
+  } catch (err) {
+    status.error = err instanceof Error ? err.message : String(err)
+  }
+  return status
+})
+
+/**
+ * List tmux sessions known to the local server. Mirrors `tmux list-sessions
+ * -F` output. Returns [] if tmux is unavailable so the UI can degrade.
+ */
+export const gcTmuxListSessions = createServerFn({ method: 'GET' }).handler(async () => {
+  const fmt = [
+    '#{session_name}',
+    '#{session_created_string}',
+    '#{session_attached}',
+    '#{session_windows}',
+    '#{session_width}',
+    '#{session_height}',
+  ].join('\t')
+  try {
+    const r = await runTmux(['list-sessions', '-F', fmt], { timeoutMs: 4000 })
+    if (!r.ok) {
+      // "no server running" -> empty list, not an error.
+      if (/no server/i.test(r.stderr)) return [] as TmuxSessionInfo[]
+      return [] as TmuxSessionInfo[]
+    }
+    return r.stdout
+      .split('\n')
+      .filter((line) => line.length > 0)
+      .map((line) => {
+        const [name, created, attached, windows, width, height] = line.split('\t')
+        return {
+          name: name ?? '',
+          createdAt: created && created !== '' ? new Date(Number(created) * 1000).toISOString() : undefined,
+          attached: attached === '1',
+          windows: Number(windows ?? 0),
+          width: width ? Number(width) : undefined,
+          height: height ? Number(height) : undefined,
+        } satisfies TmuxSessionInfo
+      })
+  } catch {
+    return [] as TmuxSessionInfo[]
+  }
+})
+
+/** Check if a specific tmux session exists. */
+export const gcTmuxHasSession = createServerFn({ method: 'GET' })
+  .validator(z.object({ name: z.string() }))
+  .handler(async ({ data }) => {
+    if (!SESSION_NAME_RE.test(data.name)) {
+      return { exists: false, error: 'invalid session name' }
+    }
+    try {
+      const r = await runTmux(['has-session', '-t', data.name], { timeoutMs: 2000 })
+      return { exists: r.ok, error: r.ok ? undefined : r.stderr.trim() }
+    } catch (err) {
+      return { exists: false, error: err instanceof Error ? err.message : String(err) }
+    }
+  })
+
+/** Create a new detached tmux session running a given shell command. */
+export const gcTmuxNewSession = createServerFn({ method: 'POST' })
+  .validator(
+    z.object({
+      name: z.string(),
+      command: z.array(z.string()).default([]),
+      cwd: z.string().optional(),
+      width: z.number().int().min(10).max(512).default(120),
+      height: z.number().int().min(5).max(256).default(30),
+      shell: z.string().optional(),
+    }),
+  )
+  .handler(async ({ data }) => {
+    if (!SESSION_NAME_RE.test(data.name)) {
+      return { ok: false as const, name: data.name, error: 'invalid session name' }
+    }
+    if (data.shell && !SHELL_BIN_RE.test(data.shell)) {
+      return { ok: false as const, name: data.name, error: 'invalid shell binary' }
+    }
+    const args = [
+      'new-session',
+      '-d',
+      '-s',
+      data.name,
+      '-x',
+      String(data.width),
+      '-y',
+      String(data.height),
+    ]
+    if (data.cwd) args.push('-c', data.cwd)
+    const shell = data.shell ?? process.env.SHELL ?? '/bin/sh'
+    if (SHELL_BIN_RE.test(shell)) {
+      args.push('-n', shell)
+    }
+    args.push(...data.command)
+    try {
+      const r = await runTmux(args, { timeoutMs: 4000 })
+      if (!r.ok) {
+        return {
+          ok: false as const,
+          name: data.name,
+          error: r.stderr.trim() || r.stdout.trim() || `tmux exited with code ${r.code}`,
+        }
+      }
+      return { ok: true as const, name: data.name }
+    } catch (err) {
+      return {
+        ok: false as const,
+        name: data.name,
+        error: err instanceof Error ? err.message : String(err),
+      }
+    }
+  })
+
+/** Kill a tmux session. */
+export const gcTmuxKillSession = createServerFn({ method: 'POST' })
+  .validator(z.object({ name: z.string() }))
+  .handler(async ({ data }) => tmuxKillSessionImpl(data))
+
+/** Capture the visible pane contents (read-only peek). */
+export const gcTmuxCapturePane = createServerFn({ method: 'GET' })
+  .validator(
+    z.object({
+      name: z.string(),
+      lines: z.number().int().min(1).max(5000).default(200),
+    }),
+  )
+  .handler(async ({ data }) => tmuxCapturePaneImpl(data))
+
+/** Send a line of text + Enter to a tmux session. Used by `nudge` etc. */
+export const gcTmuxSendKeys = createServerFn({ method: 'POST' })
+  .validator(z.object({ name: z.string(), keys: z.string() }))
+  .handler(async ({ data }) => tmuxSendKeysImpl(data))
+
+/** Implementation helpers — reusable from other server functions. */
+async function tmuxCapturePaneImpl(
+  data: { name: string; lines?: number },
+): Promise<{ output: string; error?: string }> {
+  if (!SESSION_NAME_RE.test(data.name)) {
+    return { output: '', error: 'invalid session name' }
+  }
+  try {
+    const r = await runTmux(
+      ['capture-pane', '-p', '-t', data.name, '-S', `-${data.lines ?? 200}`],
+      { timeoutMs: 4000 },
+    )
+    if (!r.ok) {
+      return { output: '', error: r.stderr.trim() || `tmux exited with code ${r.code}` }
+    }
+    return { output: r.stdout }
+  } catch (err) {
+    return { output: '', error: err instanceof Error ? err.message : String(err) }
+  }
+}
+
+async function tmuxSendKeysImpl(
+  data: { name: string; keys: string },
+): Promise<{ ok: boolean; error?: string }> {
+  if (!SESSION_NAME_RE.test(data.name)) {
+    return { ok: false, error: 'invalid session name' }
+  }
+  try {
+    const r = await runTmux(['send-keys', '-t', data.name, '-l', '--', data.keys], {
+      timeoutMs: 2000,
+    })
+    if (!r.ok) {
+      return { ok: false, error: r.stderr.trim() || `tmux exited with code ${r.code}` }
+    }
+    const enter = await runTmux(['send-keys', '-t', data.name, 'Enter'], { timeoutMs: 2000 })
+    return { ok: enter.ok, error: enter.ok ? undefined : enter.stderr.trim() }
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : String(err) }
+  }
+}
+
+async function tmuxKillSessionImpl(
+  data: { name: string },
+): Promise<{ ok: boolean; name: string; error?: string }> {
+  if (!SESSION_NAME_RE.test(data.name)) {
+    return { ok: false, name: data.name, error: 'invalid session name' }
+  }
+  try {
+    const r = await runTmux(['kill-session', '-t', data.name], { timeoutMs: 2000 })
+    if (!r.ok) {
+      return {
+        ok: false,
+        name: data.name,
+        error: r.stderr.trim() || `tmux exited with code ${r.code}`,
+      }
+    }
+    return { ok: true, name: data.name }
+  } catch (err) {
+    return {
+      ok: false,
+      name: data.name,
+      error: err instanceof Error ? err.message : String(err),
+    }
+  }
 }
 
 // City lifecycle
@@ -159,19 +485,37 @@ export const gcListSessions = createServerFn({ method: 'GET' }).handler(async ()
 export const gcSessionPeek = createServerFn({ method: 'GET' })
   .validator(z.object({ name: z.string(), lines: z.number().int().min(1).max(5000).default(200).optional() }))
   .handler(async ({ data }) => {
-    return { output: `Session peek (${data.name}) - not yet implemented via API`, name: data.name }
+    const r = await tmuxCapturePaneImpl({ name: data.name, lines: data.lines ?? 200 })
+    return { output: r.output, name: data.name, error: r.error }
   })
 
 export const gcSessionNudge = createServerFn({ method: 'POST' })
   .validator(z.object({ name: z.string(), message: z.string() }))
   .handler(async ({ data }) => {
-    return { output: `Session nudge (${data.name}) executed`, ok: true, error: undefined as string | undefined }
+    const r = await tmuxSendKeysImpl({ name: data.name, keys: data.message })
+    if (r.ok) {
+      return { output: `Session nudge (${data.name}) sent`, ok: true, error: undefined as string | undefined }
+    }
+    return {
+      output: `Session nudge (${data.name}) failed`,
+      ok: false as const,
+      error: r.error,
+    }
   })
 
 export const gcSessionReset = createServerFn({ method: 'POST' })
   .validator(z.object({ name: z.string() }))
   .handler(async ({ data }) => {
-    return { output: `Session reset (${data.name}) executed`, ok: true, error: undefined as string | undefined }
+    // Reset = kill the session so a future attach spins up a fresh one.
+    const r = await tmuxKillSessionImpl({ name: data.name })
+    if (r.ok) {
+      return { output: `Session reset (${data.name}) executed`, ok: true, error: undefined as string | undefined }
+    }
+    return {
+      output: `Session reset (${data.name}) failed`,
+      ok: false as const,
+      error: r.error,
+    }
   })
 
 export const gcSling = createServerFn({ method: 'POST' })
