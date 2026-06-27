@@ -5,6 +5,8 @@ import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 import path from 'path'
 
+import { tmuxWebSocketPlugin } from './vite/pty-websocket'
+
 // Workaround for "Duplicate declaration \"hot\"" in dev: with
 // addHmr: false set above, the router-plugin still emits a
 // `TSRSplitComponent` reference inside an `if (import.meta.hot)`
@@ -34,7 +36,8 @@ export default defineConfig({
   plugins: [
     tanstackStart({
       // SSR enabled by default; the dev server handles both client and server.
-      // The /api/pty WebSocket route runs on the Node SSR server.
+      // The /api/pty WebSocket is served by `tmuxWebSocketPlugin` below; this
+      // file route is reduced to a probe/health endpoint.
     }),
     tanstackRouter({
       target: 'react',
@@ -51,11 +54,16 @@ export default defineConfig({
     }),
     react(),
     tailwindcss(),
+    tmuxWebSocketPlugin(),
     stripSplitHmrBookkeeping(),
   ],
   resolve: {
     alias: {
       '@': path.resolve(__dirname, './src'),
+      // The prebuilt fork is preferred; the canonical `node-pty` is fallback.
+      // Resolving both to the same module keeps `import 'node-pty'` working
+      // in user code while preferring a no-compile-install path.
+      'node-pty': '@homebridge/node-pty-prebuilt-multiarch',
     },
   },
   server: {
@@ -68,14 +76,14 @@ export default defineConfig({
     },
   },
   optimizeDeps: {
-    exclude: ['node-pty', 'ws'],
+    exclude: ['node-pty', '@homebridge/node-pty-prebuilt-multiarch', 'ws'],
   },
   ssr: {
-    external: ['node-pty', 'ws'],
+    external: ['node-pty', '@homebridge/node-pty-prebuilt-multiarch', 'ws'],
   },
   build: {
     rollupOptions: {
-      external: ['node-pty', 'ws'],
+      external: ['node-pty', '@homebridge/node-pty-prebuilt-multiarch', 'ws'],
     },
   },
 })

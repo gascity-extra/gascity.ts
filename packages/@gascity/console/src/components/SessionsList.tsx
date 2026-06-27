@@ -7,6 +7,7 @@ import {
   gcListSessions,
   gcSessionNudge,
   gcSessionReset,
+  gcTmuxStatus,
 } from "@/lib/gc.functions";
 
 function relTime(iso?: string) {
@@ -24,12 +25,24 @@ export function SessionsList() {
   const list = useServerFn(gcListSessions);
   const reset = useServerFn(gcSessionReset);
   const nudge = useServerFn(gcSessionNudge);
+  const tmuxStatusFn = useServerFn(gcTmuxStatus);
   const qc = useQueryClient();
 
   const { data, isLoading, error } = useQuery({
     queryKey: ["gc", "sessions"],
     queryFn: () => list(),
     refetchInterval: 2000,
+  });
+
+  const { data: tmux } = useQuery({
+    queryKey: ["gc", "tmux-status"],
+    queryFn: () => tmuxStatusFn() as Promise<{
+      available: boolean
+      tmuxBin: string
+      version?: string
+      error?: string
+    }>,
+    refetchInterval: 10_000,
   });
 
   const resetMut = useMutation({
@@ -41,9 +54,16 @@ export function SessionsList() {
     <div className="flex h-full flex-col">
       <div className="flex items-center justify-between border-b border-border px-6 py-3">
         <h1 className="font-mono text-sm text-foreground">sessions</h1>
-        <span className="font-mono text-[11px] text-muted-foreground">
-          {data?.length ?? 0} · refresh 2s
-        </span>
+        <div className="flex items-center gap-3 font-mono text-[11px] text-muted-foreground">
+          <TmuxBadge
+            available={!!tmux?.available}
+            version={tmux?.version}
+            bin={tmux?.tmuxBin}
+          />
+          <span>
+            {data?.length ?? 0} · refresh 2s
+          </span>
+        </div>
       </div>
       <div className="flex-1 overflow-y-auto">
         {isLoading && (
@@ -147,5 +167,39 @@ function Empty() {
         <code>GC_API_BASE_URL</code> and that <code>gc start</code> is running.
       </div>
     </div>
+  );
+}
+
+function TmuxBadge({
+  available,
+  version,
+  bin,
+}: {
+  available: boolean;
+  version?: string;
+  bin?: string;
+}) {
+  return (
+    <span
+      title={
+        available
+          ? `tmux provider ready · ${bin ?? "tmux"} ${version ?? ""}`
+          : "tmux not on PATH — terminal bridge is read-only (peek/nudge)"
+      }
+      className={clsx(
+        "flex items-center gap-1.5 rounded border px-1.5 py-0.5",
+        available
+          ? "border-emerald-500/40 text-emerald-600 dark:text-emerald-400"
+          : "border-border text-muted-foreground",
+      )}
+    >
+      <span
+        className={clsx(
+          "inline-block h-1.5 w-1.5 rounded-full",
+          available ? "bg-emerald-500" : "bg-muted-foreground",
+        )}
+      />
+      tmux
+    </span>
   );
 }
