@@ -13,6 +13,8 @@ import {
   gcHealth,
   gcSupervisorLogs,
   gcSupervisorRestart,
+  gcSupervisorStart,
+  gcSupervisorStop,
   gcVersion,
 } from "@/lib/gc.functions";
 
@@ -216,8 +218,10 @@ function SupervisorPopover({
   version: { version: string } | undefined;
 }) {
   const logs = useServerFn(gcSupervisorLogs);
-  const start = useServerFn(gcCityStart);
-  const stop = useServerFn(gcCityStop);
+  const cityStart = useServerFn(gcCityStart);
+  const cityStop = useServerFn(gcCityStop);
+  const supervisorStart = useServerFn(gcSupervisorStart);
+  const supervisorStop = useServerFn(gcSupervisorStop);
   const restart = useServerFn(gcSupervisorRestart);
   const status = useServerFn(gcCityStatus);
   const qc = useQueryClient();
@@ -251,10 +255,24 @@ function SupervisorPopover({
   useEffect(() => {
     if (!transition) return;
     const elapsed = Date.now() - transitionStart.current;
-    if (transition === "starting" && city?.running) setTransition(null);
-    else if (transition === "stopping" && !city?.running) setTransition(null);
-    else if (elapsed > 35000) setTransition(null);
-  }, [city, transition]);
+    // Clear "starting" once the system has reached the target state.
+    // For supervisor-start: supervisor reachable + city stopped is the
+    // target. For city-start: city running is the target. For both we
+    // accept either signal as success.
+    if (
+      transition === "starting" &&
+      (health?.reachable || city?.running)
+    ) {
+      setTransition(null);
+    } else if (
+      transition === "stopping" &&
+      (!city?.running || !health?.reachable)
+    ) {
+      setTransition(null);
+    } else if (elapsed > 35000) {
+      setTransition(null);
+    }
+  }, [city, transition, health?.reachable]);
 
   // Phase model:
   //   down        – supervisor unreachable
@@ -277,40 +295,90 @@ function SupervisorPopover({
     );
   }
 
-  const startMut = useMutation({
-    mutationFn: () => start({ data: {} }),
+  // Capture the phase at click time so the mutation's mutationFn and
+// onSuccess/onError callbacks don't drift if React re-renders between
+// the click and the network round-trip (StrictMode intentionally
+// double-invokes useMutation in dev, so without this we'd see
+// supervisor-start fire then city-start immediately after).
+const startIntent = useRef<"supervisor-start" | "city-start" | null>(null)
+const stopIntent = useRef<"supervisor-stop" | "city-stop" | null>(null)
+
+function captureStartIntent(): "supervisor-start" | "city-start" | null {
+  const intent = phase === "down" ? "supervisor-start" : phase === "up-stopped" ? "city-start" : null
+  startIntent.current = intent
+  return intent
+}
+function captureStopIntent(): "supervisor-stop" | "city-stop" | null {
+  const intent = phase === "up-running" ? "city-stop" : phase === "up-stopped" ? "supervisor-stop" : null
+  stopIntent.current = intent
+  return intent
+}
+
+const startMut = useMutation({
+    mutationFn: () => {
+      const intent = startIntent.current
+      if (intent === "supervisor-start") return supervisorStart()
+      if (intent === "city-start") return cityStart({ data: {} })
+      throw new Error(`no start intent captured (phase=${phase})`)
+    },
     onMutate: () => {
-      setTransition("starting");
-      transitionStart.current = Date.now();
-      appendConsole("$ gc start", "requesting…");
+      setTransition("starting")
+      transitionStart.current = Date.now()
+      const label =
+        startIntent.current === "supervisor-start"
+          ? "$ gc supervisor start"
+          : "$ gc city start"
+      appendConsole(label, "requesting…")
     },
     onSuccess: (r) => {
-      appendConsole("$ gc start", r.output);
-      if (!r.ok) appendConsole("! gc start", `error: ${r.error ?? "unknown"}`);
-      qc.invalidateQueries({ queryKey: ["gc", "health"] });
-      qc.invalidateQueries({ queryKey: ["gc", "city-status"] });
+      const label =
+        startIntent.current === "supervisor-start"
+          ? "$ gc supervisor start"
+          : "$ gc city start"
+      appendConsole(label, r.output)
+      if (!r.ok) {
+        appendConsole(`! ${label.replace(/^\$ /, "")}`, `error: ${r.error ?? "unknown"}`)
+      }
+      qc.invalidateQueries({ queryKey: ["gc", "health"] })
+      qc.invalidateQueries({ queryKey: ["gc", "city-status"] })
     },
     onError: (e: unknown) => {
-      appendConsole("! gc start", e instanceof Error ? e.message : String(e));
-      setTransition(null);
+      appendConsole("! start", e instanceof Error ? e.message : String(e))
+      setTransition(null)
     },
-  });
-  const stopMut = useMutation({
-    mutationFn: () => stop({ data: {} }),
+})
+
+const stopMut = useMutation({
+    mutationFn: () => {
+      const intent = stopIntent.current
+      if (intent === "supervisor-stop") return supervisorStop()
+      if (intent === "city-stop") return cityStop({ data: {} })
+      throw new Error(`no stop intent captured (phase=${phase})`)
+    },
     onMutate: () => {
-      setTransition("stopping");
-      transitionStart.current = Date.now();
-      appendConsole("$ gc stop", "requesting…");
+      setTransition("stopping")
+      transitionStart.current = Date.now()
+      const label =
+        stopIntent.current === "supervisor-stop"
+          ? "$ gc supervisor stop"
+          : "$ gc city stop"
+      appendConsole(label, "requesting…")
     },
     onSuccess: (r) => {
-      appendConsole("$ gc stop", r.output);
-      if (!r.ok) appendConsole("! gc stop", `error: ${r.error ?? "unknown"}`);
-      qc.invalidateQueries({ queryKey: ["gc", "health"] });
-      qc.invalidateQueries({ queryKey: ["gc", "city-status"] });
+      const label =
+        stopIntent.current === "supervisor-stop"
+          ? "$ gc supervisor stop"
+          : "$ gc city stop"
+      appendConsole(label, r.output)
+      if (!r.ok) {
+        appendConsole(`! ${label.replace(/^\$ /, "")}`, `error: ${r.error ?? "unknown"}`)
+      }
+      qc.invalidateQueries({ queryKey: ["gc", "health"] })
+      qc.invalidateQueries({ queryKey: ["gc", "city-status"] })
     },
     onError: (e: unknown) => {
-      appendConsole("! gc stop", e instanceof Error ? e.message : String(e));
-      setTransition(null);
+      appendConsole("! stop", e instanceof Error ? e.message : String(e))
+      setTransition(null)
     },
   });
   const restartMut = useMutation({
@@ -318,16 +386,16 @@ function SupervisorPopover({
     onMutate: () => {
       setTransition("starting");
       transitionStart.current = Date.now();
-      appendConsole("$ gc restart", "stopping + starting…");
+      appendConsole("$ gc supervisor restart", "stopping + starting…");
     },
     onSuccess: (r) => {
-      appendConsole("$ gc restart", r.output);
-      if (!r.ok) appendConsole("! gc restart", `error: ${r.error ?? "unknown"}`);
+      appendConsole("$ gc supervisor restart", r.output);
+      if (!r.ok) appendConsole("! gc supervisor restart", `error: ${r.error ?? "unknown"}`);
       qc.invalidateQueries({ queryKey: ["gc", "health"] });
       qc.invalidateQueries({ queryKey: ["gc", "city-status"] });
     },
     onError: (e: unknown) => {
-      appendConsole("! gc restart", e instanceof Error ? e.message : String(e));
+      appendConsole("! gc supervisor restart", e instanceof Error ? e.message : String(e));
       setTransition(null);
     },
   });
@@ -343,12 +411,31 @@ function SupervisorPopover({
             ? "stopping…"
             : "down";
 
-  const canStart = phase === "up-stopped";
-  const canStop = phase === "up-running";
-  const canRestart = phase === "up-running" || phase === "up-stopped";
-  const busy = !!transition;
+  // Button enablement + action kind. The button labels stay constant
+// ("start", "restart", "stop"); a `data-action-kind` attribute exposes
+// what the click will actually do so tests (and tooltip UIs) can
+// introspect the current target.
+const startActionKind =
+  phase === "down"
+    ? "supervisor-start"
+    : phase === "up-stopped"
+      ? "city-start"
+      : null;
+const stopActionKind =
+  phase === "up-running"
+    ? "city-stop"
+    : phase === "up-stopped"
+      ? "supervisor-stop"
+      : null;
+const restartActionKind =
+  phase === "up-running" || phase === "up-stopped" ? "supervisor-restart" : null;
 
-  return (
+const canStart = startActionKind !== null;
+const canStop = stopActionKind !== null;
+const canRestart = restartActionKind !== null;
+const busy = !!transition;
+
+return (
     <>
       <div
         className="fixed inset-0 z-40"
@@ -369,10 +456,12 @@ function SupervisorPopover({
           </div>
           <div className="flex gap-1.5">
             <button
-              onClick={() => startMut.mutate()}
+              onClick={() => { captureStartIntent(); startMut.mutate() }}
               disabled={!canStart || busy}
-              aria-label="start city"
+              aria-label={startActionKind === "supervisor-start" ? "start supervisor" : "start city"}
+              title={startActionKind === "supervisor-start" ? "start the gc supervisor daemon" : "start the city"}
               data-testid="supervisor-start"
+              data-action-kind={startActionKind ?? "unavailable"}
               className="rounded border border-border px-2 py-0.5 font-mono text-[11px] hover:bg-muted disabled:opacity-40"
             >
               start
@@ -380,17 +469,21 @@ function SupervisorPopover({
             <button
               onClick={() => restartMut.mutate()}
               disabled={!canRestart || busy}
-              aria-label="restart city"
+              aria-label="restart supervisor"
+              title="restart the gc supervisor daemon"
               data-testid="supervisor-restart"
+              data-action-kind={restartActionKind ?? "unavailable"}
               className="rounded border border-border px-2 py-0.5 font-mono text-[11px] hover:bg-muted disabled:opacity-40"
             >
               restart
             </button>
             <button
-              onClick={() => stopMut.mutate()}
+              onClick={() => { captureStopIntent(); stopMut.mutate() }}
               disabled={!canStop || busy}
-              aria-label="stop city"
+              aria-label={stopActionKind === "supervisor-stop" ? "stop supervisor" : "stop city"}
+              title={stopActionKind === "supervisor-stop" ? "stop the gc supervisor daemon" : "stop the city"}
               data-testid="supervisor-stop"
+              data-action-kind={stopActionKind ?? "unavailable"}
               className="rounded border border-border px-2 py-0.5 font-mono text-[11px] text-muted-foreground hover:text-foreground disabled:opacity-40"
             >
               stop

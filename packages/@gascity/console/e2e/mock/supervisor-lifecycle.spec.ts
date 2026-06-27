@@ -81,9 +81,16 @@ test.describe("supervisor panel lifecycle (mock)", () => {
         await expect(page.locator(SUPERVISOR_TOGGLE_SELECTOR)).toContainText("1.0.0", { timeout: 15_000 });
         await expect(page.getByTestId(POPOVER_TESTID.agents)).toHaveText(/^0\/0$/, { timeout: 10_000 });
 
+        // beforeEach brings the supervisor up, so by the time the
+        // popover opens the phase is "up-stopped" and the start
+        // button targets the city. Verify that with a data-action-kind
+        // check (stable testid but the action varies with phase).
+        const startBtn = page.getByTestId(POPOVER_TESTID.start);
+        await expect(startBtn).toHaveAttribute("data-action-kind", "city-start");
+
         // Click START. Action console records the request.
-        await page.getByTestId(POPOVER_TESTID.start).click({ force: true });
-        await expect(page.locator("pre", { hasText: "$ gc start" })).toBeVisible({ timeout: 10_000 });
+        await startBtn.click({ force: true });
+        await expect(page.locator("pre", { hasText: "$ gc city start" })).toBeVisible({ timeout: 10_000 });
 
         // Stats populate from the city-status poll.
         await expect(page.getByTestId(POPOVER_TESTID.agents)).toHaveText(/\d+\/\d+/, { timeout: 15_000 });
@@ -93,8 +100,10 @@ test.describe("supervisor panel lifecycle (mock)", () => {
         await expect(page.locator("text=operational")).toBeVisible({ timeout: 15_000 });
 
         // Click STOP. Action console records the request, stats reset.
-        await page.getByTestId(POPOVER_TESTID.stop).click({ force: true });
-        await expect(page.locator("pre", { hasText: "$ gc stop" })).toBeVisible({ timeout: 10_000 });
+        const stopBtn = page.getByTestId(POPOVER_TESTID.stop);
+        await expect(stopBtn).toHaveAttribute("data-action-kind", "city-stop");
+        await stopBtn.click({ force: true });
+        await expect(page.locator("pre", { hasText: "$ gc city stop" })).toBeVisible({ timeout: 10_000 });
         await expect(page.getByTestId(POPOVER_TESTID.agents)).toHaveText(/^0\/0$/, { timeout: 15_000 });
 
         // Phase label flips back to "supervisor up · city stopped".
@@ -102,8 +111,8 @@ test.describe("supervisor panel lifecycle (mock)", () => {
 
         // Action console contains both commands.
         const consoleText = await page.locator("pre").filter({ hasText: "$ gc" }).innerText();
-        expect(consoleText).toContain("$ gc start");
-        expect(consoleText).toContain("$ gc stop");
+        expect(consoleText).toContain("$ gc city start");
+        expect(consoleText).toContain("$ gc city stop");
 
         // Supervisor log section populated.
         await expect(
@@ -111,39 +120,30 @@ test.describe("supervisor panel lifecycle (mock)", () => {
         ).toBeVisible({ timeout: 10_000 });
     });
 
-    test("restart cycles stop → start (city restarts under the same name)", async ({ page }) => {
-        // The restart button delegates to stopCityImpl + startCityImpl under
-        // the hood. We assert the action console records both calls — but
-        // only verify the user-visible surface (the restart output mentions
-        // the city name) and that the city is running afterwards. This keeps
-        // the test resilient to the exact ordering of the inner stop/start
-        // pair.
+    test("restart cycles the supervisor daemon (stop + start)", async ({ page }) => {
+        // The restart button delegates to gcSupervisorRestart, which now
+        // actually restarts the daemon (stop + start via the mock-gc shim).
+        // We don't care about city state here — the city will re-register
+        // on its own after the daemon comes back. Just verify the daemon
+        // comes back up after the restart cycle.
         await openSupervisorPopover(page);
         await expect(page.locator(SUPERVISOR_TOGGLE_SELECTOR)).toContainText("1.0.0", { timeout: 15_000 });
-        await expect(page.getByTestId(POPOVER_TESTID.agents)).toHaveText(/^0\/0$/, { timeout: 10_000 });
+        const restartBtn = page.getByTestId(POPOVER_TESTID.restart);
+        await expect(restartBtn).toHaveAttribute("data-action-kind", "supervisor-restart");
 
-        // Pre-condition: city stopped. Start it, wait for running.
-        await page.getByTestId(POPOVER_TESTID.start).click({ force: true });
-        await expect(page.getByTestId(POPOVER_TESTID.agents)).toHaveText(/\d+\/\d+/, { timeout: 15_000 });
+        // Click restart. The mock has a 50ms gap between stop and start,
+        // so during this window /health returns 503 and the panel flips
+        // briefly through the "down" phase. After the start comes back
+        // we should see "supervisor up · city stopped".
+        await restartBtn.click({ force: true });
+        await expect(
+            page.locator("pre", { hasText: "$ gc supervisor restart" }),
+        ).toBeVisible({ timeout: 15_000 });
 
-        // Now click restart. We tolerate the action console format — just
-        // require that the action console contains the word "restart" and
-        // that the city is still running after the operation completes.
-        await page.getByTestId(POPOVER_TESTID.restart).click({ force: true });
-        // Give the click handler time to fire and the mutation to complete.
-        // We don't assert on a specific text because the stop+start inner
-        // race is implementation-detail; we assert the cycle outcome.
-        await page.waitForTimeout(3_000)
-        // Action console should reflect that the user invoked restart (the
-        // optimistic "$ gc restart" line may or may not appear depending on
-        // how the server function races the city-status poll, but at minimum
-        // the start and stop entries from the inner cycle should be present).
-        const consoleText = await page.locator("pre").filter({ hasText: "$ gc" }).innerText();
-        expect(consoleText).toContain("$ gc start");
-
-        // After the restart cycle the city should be running again.
-        await expect(page.getByTestId(POPOVER_TESTID.agents)).toHaveText(/\d+\/\d+/, { timeout: 20_000 });
-        await expect(page.locator("text=operational")).toBeVisible({ timeout: 20_000 });
+        // Eventually the LED settles back on "supervisor up" (any phase
+        // ending in "up" is fine — we don't care whether the city is
+        // running for this test).
+        await expect(page.locator("text=supervisor up")).toBeVisible({ timeout: 15_000 });
     });
 
     test("start is rejected with 403 without the anti-CSRF header", async ({ request }) => {
@@ -207,5 +207,42 @@ test.describe("supervisor panel lifecycle (mock)", () => {
         // And /health reflects down.
         const h1 = await request.get(`${MOCK_GC_BASE}/health`);
         expect(h1.status()).toBe(503);
+    });
+
+    test("UI bootstrap: panel start button brings the supervisor up", async ({ page, request }) => {
+        // This is the user-visible proof that "start the supervisor from
+        // the console" works. The panel opens with the supervisor down,
+        // shows a red LED, the start button is enabled (not grayed) and
+        // labeled with a `data-action-kind` of "supervisor-start". Clicking
+        // it fires `gcSupervisorStart`, which spawns the mock-gc shim,
+        // which POSTs /v0/supervisor/start. The panel then flips to
+        // "supervisor up · city stopped" (amber) and the start button
+        // becomes a city-start.
+        await resetMock(request);
+
+        await openSupervisorPopover(page);
+
+        // Sanity: phase is "down" and start is enabled targeting the
+        // daemon.
+        await expect(page.locator("text=down")).toBeVisible({ timeout: 15_000 });
+        const startBtn = page.getByTestId(POPOVER_TESTID.start);
+        await expect(startBtn).toBeEnabled({ timeout: 15_000 });
+        await expect(startBtn).toHaveAttribute("data-action-kind", "supervisor-start");
+        await expect(startBtn).toHaveAttribute("title", /start the gc supervisor daemon/);
+
+        // Click and wait for the action console to record the daemon
+        // start. Then poll until the panel settles on "supervisor up".
+        await startBtn.click({ force: true });
+        await expect(
+            page.locator("pre", { hasText: "$ gc supervisor start" }),
+        ).toBeVisible({ timeout: 15_000 });
+        await expect(
+            page.locator("pre", { hasText: "gc supervisor started" }),
+        ).toBeVisible({ timeout: 15_000 });
+
+        // Phase eventually lands on "supervisor up · city stopped" and
+        // the start button now targets the city.
+        await expect(page.locator("text=supervisor up")).toBeVisible({ timeout: 15_000 });
+        await expect(startBtn).toHaveAttribute("data-action-kind", "city-start", { timeout: 15_000 });
     });
 });
