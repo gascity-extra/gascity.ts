@@ -22,6 +22,7 @@ nx/
 # Temporary files
 tmp/
 *.tmp
+*.tsbuildinfo
 
 # OS
 .DS_Store
@@ -53,3 +54,6 @@ package-lock.json
 yarn.lock
 pnpm-lock.yaml
 packages/@gascity/*/bun.lock
+
+# Mock GC supervisor test fixtures (written by e2e/mock-gc-supervisor.ts)
+packages/@gascity/console/.mock-gc.*

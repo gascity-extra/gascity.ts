@@ -1,19 +1,27 @@
 /**
  * Playwright config for the @gascity/console package.
  *
- * The console has two kinds of end-to-end tests:
- *   1. UI smoke tests (in `e2e/tests/`) — load the dev server and check
- *      basic page renders. These work with no GC backend; the server
- *      functions gracefully degrade.
- *   2. Workflow scenarios (in `e2e/scenarios/`) — exercise sling → session
- *      → agent flow. These require a running `gc` supervisor on
- *      GC_API_BASE_URL (default http://127.0.0.1:8372) and are skipped if
- *      the backend isn't reachable.
+ * Three kinds of end-to-end tests:
+ *
+ *   1. UI smoke tests in `e2e/tests/` — render checks. Work without a
+ *      GC backend; the server functions gracefully degrade.
+ *
+ *   2. Workflow scenarios in `e2e/scenarios/` — exercise sling → session
+ *      → agent flow against a live `gc` supervisor. Skipped unless one
+ *      is reachable on GC_API_BASE_URL.
+ *
+ *   3. Supervisor lifecycle in `e2e/mock/` — drives the start/stop/
+ *      restart/LED state machine end-to-end. By default it intercepts
+ *      the GC endpoints with Playwright route handlers, so it runs
+ *      without any external backend. When `MOCK_GC=0` and a real
+ *      `gc` supervisor is reachable, the same spec body exercises the
+ *      real API for integration coverage.
  *
  * Run:
- *   bun run test:e2e              # everything that's runnable
- *   bun run test:e2e -- e2e/tests # UI-only
- *   SKIP_E2E_SCENARIOS=1 bun run test:e2e  # skip scenario tests
+ *   bun run test:e2e                                # UI + scenarios (if reachable)
+ *   bun run test:e2e -- e2e/tests                  # UI-only
+ *   SKIP_E2E_SCENARIOS=1 bun run test:e2e          # skip scenarios
+ *   bun run test:e2e:mock                          # mock supervisor flow
  */
 import { defineConfig, devices } from "@playwright/test";
 
@@ -24,9 +32,10 @@ const GC_BACKEND = process.env.GC_API_BASE_URL ?? "http://127.0.0.1:8372";
 
 export default defineConfig({
   testDir: "./e2e",
-  testIgnore: SKIP_SCENARIOS ? "**/scenarios/**" : undefined,
-  // Don't fail the whole run if scenarios can't reach the GC backend —
-  // they're tagged so callers can opt-in/out. UI tests run unconditionally.
+  // Skip scenarios (require live supervisor) and mock/ (lives in its
+  // own config). Run `bun run test:e2e:mock` to exercise the mock
+  // supervisor lifecycle.
+  testIgnore: ["**/scenarios/**", "**/mock/**"],
   timeout: 30_000,
   fullyParallel: false,
   forbidOnly: !!process.env.CI,
@@ -54,7 +63,6 @@ export default defineConfig({
     stdout: "pipe",
     stderr: "pipe",
   },
-  // Surfaced in tests as `test.info().project.metadata.gcBackend`.
   metadata: {
     gcBackend: GC_BACKEND,
     skipScenarios: SKIP_SCENARIOS,

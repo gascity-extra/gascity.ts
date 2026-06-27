@@ -8,6 +8,7 @@ import clsx from "clsx";
 
 import {
   gcCityStart,
+  gcCityStatus,
   gcCityStop,
   gcHealth,
   gcSupervisorLogs,
@@ -98,7 +99,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   );
 }
 
-type Phase = "down" | "starting" | "stopping" | "up";
+type Phase = "down" | "up-stopped" | "up-running" | "starting" | "stopping";
 
 function Header({
   onPalette,
@@ -186,13 +187,15 @@ function StatusDot({
   reachable?: boolean;
   phase?: Phase;
 }) {
-  const p: Phase = phase ?? (reachable ? "up" : "down");
+  const p: Phase = phase ?? (reachable ? "up-running" : "down");
   const cls =
-    p === "up"
+    p === "up-running"
       ? "bg-emerald-500 shadow-[0_0_6px_rgba(16,185,129,0.7)]"
-      : p === "starting" || p === "stopping"
-        ? "bg-amber-500 shadow-[0_0_6px_rgba(245,158,11,0.8)] animate-pulse"
-        : "bg-red-500 shadow-[0_0_6px_rgba(239,68,68,0.7)]";
+      : p === "up-stopped"
+        ? "bg-amber-500 shadow-[0_0_6px_rgba(245,158,11,0.7)]"
+        : p === "starting" || p === "stopping"
+          ? "bg-amber-500 shadow-[0_0_6px_rgba(245,158,11,0.8)] animate-pulse"
+          : "bg-red-500 shadow-[0_0_6px_rgba(239,68,68,0.7)]";
   return <span className={clsx("inline-block h-1.5 w-1.5 rounded-full", cls)} />;
 }
 
@@ -216,6 +219,7 @@ function SupervisorPopover({
   const start = useServerFn(gcCityStart);
   const stop = useServerFn(gcCityStop);
   const restart = useServerFn(gcSupervisorRestart);
+  const status = useServerFn(gcCityStatus);
   const qc = useQueryClient();
 
   const [transition, setTransition] = useState<null | "starting" | "stopping">(null);
@@ -224,24 +228,47 @@ function SupervisorPopover({
 
   const { data: log } = useQuery({
     queryKey: ["gc", "supervisor-logs"],
-    queryFn: () => logs({ data: { lines: 200 }}),
+    queryFn: () => logs({ data: { lines: 200 } }),
     refetchInterval: 3000,
   });
 
+  const { data: city } = useQuery({
+    queryKey: ["gc", "city-status"],
+    queryFn: () => status({ data: { lite: true } }),
+    refetchInterval: 5000,
+    // Always poll — when the supervisor is offline the server function
+    // degrades to a silent empty state, so the cost is negligible.
+    // Keeping the poll alive means the LED flips green the moment the
+    // supervisor comes back, instead of staying red until the next page
+    // load.
+    enabled: true,
+  });
+
+  // Clear the "starting" transition once the city actually comes up;
+  // clear the "stopping" transition once the city disappears. This is
+  // what makes the LED green / amber behave deterministically instead of
+  // just guessing based on the supervisor reachability.
   useEffect(() => {
     if (!transition) return;
-    const reachable = health?.reachable ?? false;
     const elapsed = Date.now() - transitionStart.current;
-    if (transition === "starting" && reachable) setTransition(null);
-    else if (transition === "stopping" && !reachable) setTransition(null);
-    else if (elapsed > 30000) setTransition(null);
-  }, [health, transition]);
+    if (transition === "starting" && city?.running) setTransition(null);
+    else if (transition === "stopping" && !city?.running) setTransition(null);
+    else if (elapsed > 35000) setTransition(null);
+  }, [city, transition]);
 
+  // Phase model:
+  //   down        – supervisor unreachable
+  //   up-stopped  – supervisor reachable, no city running (amber)
+  //   up-running  – supervisor reachable, city running (green)
+  //   starting    – optimistic: just clicked start, awaiting confirmation
+  //   stopping    – optimistic: just clicked stop, awaiting confirmation
   const phase: Phase = transition
     ? transition
-    : health?.reachable
-      ? "up"
-      : "down";
+    : !health?.reachable
+      ? "down"
+      : city?.running
+        ? "up-running"
+        : "up-stopped";
 
   function appendConsole(cmd: string, out: string) {
     const ts = new Date().toLocaleTimeString();
@@ -251,47 +278,75 @@ function SupervisorPopover({
   }
 
   const startMut = useMutation({
-    mutationFn: () => start(),
+    mutationFn: () => start({ data: {} }),
     onMutate: () => {
       setTransition("starting");
       transitionStart.current = Date.now();
+      appendConsole("$ gc start", "requesting…");
     },
     onSuccess: (r) => {
       appendConsole("$ gc start", r.output);
+      if (!r.ok) appendConsole("! gc start", `error: ${r.error ?? "unknown"}`);
       qc.invalidateQueries({ queryKey: ["gc", "health"] });
+      qc.invalidateQueries({ queryKey: ["gc", "city-status"] });
+    },
+    onError: (e: unknown) => {
+      appendConsole("! gc start", e instanceof Error ? e.message : String(e));
+      setTransition(null);
     },
   });
   const stopMut = useMutation({
-    mutationFn: () => stop(),
+    mutationFn: () => stop({ data: {} }),
     onMutate: () => {
       setTransition("stopping");
       transitionStart.current = Date.now();
+      appendConsole("$ gc stop", "requesting…");
     },
     onSuccess: (r) => {
       appendConsole("$ gc stop", r.output);
+      if (!r.ok) appendConsole("! gc stop", `error: ${r.error ?? "unknown"}`);
       qc.invalidateQueries({ queryKey: ["gc", "health"] });
+      qc.invalidateQueries({ queryKey: ["gc", "city-status"] });
+    },
+    onError: (e: unknown) => {
+      appendConsole("! gc stop", e instanceof Error ? e.message : String(e));
+      setTransition(null);
     },
   });
   const restartMut = useMutation({
-    mutationFn: () => restart(),
+    mutationFn: () => restart({ data: {} }),
     onMutate: () => {
       setTransition("starting");
       transitionStart.current = Date.now();
+      appendConsole("$ gc restart", "stopping + starting…");
     },
     onSuccess: (r) => {
       appendConsole("$ gc restart", r.output);
+      if (!r.ok) appendConsole("! gc restart", `error: ${r.error ?? "unknown"}`);
       qc.invalidateQueries({ queryKey: ["gc", "health"] });
+      qc.invalidateQueries({ queryKey: ["gc", "city-status"] });
+    },
+    onError: (e: unknown) => {
+      appendConsole("! gc restart", e instanceof Error ? e.message : String(e));
+      setTransition(null);
     },
   });
 
   const phaseLabel =
-    phase === "up"
+    phase === "up-running"
       ? "operational"
-      : phase === "starting"
-        ? "starting…"
-        : phase === "stopping"
-          ? "stopping…"
-          : "down";
+      : phase === "up-stopped"
+        ? "supervisor up · city stopped"
+        : phase === "starting"
+          ? "starting…"
+          : phase === "stopping"
+            ? "stopping…"
+            : "down";
+
+  const canStart = phase === "up-stopped";
+  const canStop = phase === "up-running";
+  const canRestart = phase === "up-running" || phase === "up-stopped";
+  const busy = !!transition;
 
   return (
     <>
@@ -301,7 +356,7 @@ function SupervisorPopover({
         aria-hidden
       />
       <div
-        className="absolute right-4 top-11 z-50 w-[520px] overflow-hidden rounded-md border border-border bg-card shadow-lg"
+        className="absolute right-4 top-11 z-50 w-[620px] overflow-hidden rounded-md border border-border bg-card shadow-lg"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between border-b border-border px-4 py-2.5">
@@ -315,21 +370,27 @@ function SupervisorPopover({
           <div className="flex gap-1.5">
             <button
               onClick={() => startMut.mutate()}
-              disabled={phase === "up" || !!transition}
+              disabled={!canStart || busy}
+              aria-label="start city"
+              data-testid="supervisor-start"
               className="rounded border border-border px-2 py-0.5 font-mono text-[11px] hover:bg-muted disabled:opacity-40"
             >
               start
             </button>
             <button
               onClick={() => restartMut.mutate()}
-              disabled={!!transition}
+              disabled={!canRestart || busy}
+              aria-label="restart city"
+              data-testid="supervisor-restart"
               className="rounded border border-border px-2 py-0.5 font-mono text-[11px] hover:bg-muted disabled:opacity-40"
             >
               restart
             </button>
             <button
               onClick={() => stopMut.mutate()}
-              disabled={phase === "down" || !!transition}
+              disabled={!canStop || busy}
+              aria-label="stop city"
+              data-testid="supervisor-stop"
               className="rounded border border-border px-2 py-0.5 font-mono text-[11px] text-muted-foreground hover:text-foreground disabled:opacity-40"
             >
               stop
@@ -337,19 +398,41 @@ function SupervisorPopover({
           </div>
         </div>
 
-        <div className="grid grid-cols-2 gap-px bg-border font-mono text-[11px]">
+        <div className="grid grid-cols-4 gap-px bg-border font-mono text-[11px]">
           <div className="bg-background px-4 py-2">
             <div className="text-[10px] uppercase tracking-wider text-muted-foreground">
-              gc version
+              agents
             </div>
-            <div className="text-foreground">{version?.version ?? "—"}</div>
+            <div className="text-foreground" data-testid="stat-agents">
+              {city?.reachable ? `${city.agents.running}/${city.agents.total}` : "—"}
+            </div>
           </div>
           <div className="bg-background px-4 py-2">
             <div className="text-[10px] uppercase tracking-wider text-muted-foreground">
-              api
+              sessions
             </div>
-            <div className="text-foreground">
-              {health?.version ?? (health?.reachable ? "reachable" : health?.error ?? "unreachable")}
+            <div className="text-foreground" data-testid="stat-sessions">
+              {city?.reachable ? `${city.sessions.running}/${city.sessions.total}` : "—"}
+            </div>
+          </div>
+          <div className="bg-background px-4 py-2">
+            <div className="text-[10px] uppercase tracking-wider text-muted-foreground">
+              mail
+            </div>
+            <div className="text-foreground" data-testid="stat-mail">
+              {city?.reachable
+                ? city.mail.unread > 0
+                  ? `${city.mail.unread} unread / ${city.mail.total}`
+                  : `${city.mail.total}`
+                : "—"}
+            </div>
+          </div>
+          <div className="bg-background px-4 py-2">
+            <div className="text-[10px] uppercase tracking-wider text-muted-foreground">
+              beads
+            </div>
+            <div className="text-foreground" data-testid="stat-beads">
+              {city?.reachable ? `${city.work.open} open` : "—"}
             </div>
           </div>
         </div>

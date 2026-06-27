@@ -12,6 +12,7 @@
 import { createServerFn } from '@tanstack/react-start'
 import { z } from 'zod'
 import { DefaultService, configureGasCityClient } from '@gascity/client'
+import { silentIfOffline } from './gc-errors'
 
 // Configure the OpenAPI-generated client once at module load. Without this,
 // `DefaultService.*` calls hit `axios` with an empty `BASE`, which throws
@@ -351,19 +352,290 @@ async function tmuxKillSessionImpl(
 }
 
 // City lifecycle
+//
+// These call the real GC API:
+//
+//   POST /v0/city               → register + start a city (async)
+//   POST /v0/city/{name}/unregister → stop a city (async)
+//
+// Both endpoints are async: they return `AsyncAcceptedResponse` with an
+// `event_cursor` and `request_id`. We then poll /v0/events?since=<since>
+// (cheap REST call) for the matching `request.result.*` or
+// `request.failed` event before reporting success — that way the UI LED
+// flips on real backend confirmation, not a fire-and-forget 202.
+//
+// Supervisor daemon itself has no API surface — `gc` runs as a separate
+// process and is started/stopped by the operator. `gcSupervisorRestart`
+// therefore delegates to the city lifecycle (the only thing the API can
+// usefully "restart") and surfaces a clear note in the action console.
 
-export const gcCityStart = createServerFn({ method: 'POST' }).handler(async () => {
-  return { output: 'GC city start command executed', ok: true, error: undefined as string | undefined }
-})
+const REQUEST_TIMEOUT_MS = 30_000
+const REQUEST_POLL_MS = 750
 
-export const gcCityStop = createServerFn({ method: 'POST' }).handler(async () => {
-  return { output: 'GC city stop command executed', ok: true, error: undefined as string | undefined }
-})
+/**
+ * Read recent supervisor events. We don't have a `/logs` endpoint, but
+ * `/v0/events` gives us the same operational signal in a structured form.
+ * The UI labels this as "supervisor log" because that's what an operator
+ * would expect to see; the actual source is the supervisor's event log.
+ */
+async function readSupervisorEvents(since?: string, limit = 200): Promise<{
+  events: Array<{ id: string; type: string; actor?: string; created_at?: string; payload?: unknown }>
+}> {
+  const res = await DefaultService.getV0Events(undefined, undefined, since, limit)
+  const ok = unwrap(res as Envelope<{ events?: Array<{ id?: unknown; type?: unknown; actor?: unknown; created_at?: unknown; payload?: unknown }> }>)
+  if (!ok) return { events: [] }
+  return {
+    events: (ok.events ?? []).map((e) => ({
+      id: String(e.id ?? ''),
+      type: String(e.type ?? ''),
+      actor: e.actor as string | undefined,
+      created_at: e.created_at as string | undefined,
+      payload: e.payload,
+    })),
+  }
+}
+
+/**
+ * Poll the event stream until an event with type matching one of
+ * `matchTypes` and `request_id === requestId` arrives, or until the
+ * timeout expires.
+ */
+async function awaitRequestResult(
+  requestId: string | undefined,
+  cursor: string | undefined,
+  matchTypes: string[],
+  timeoutMs = REQUEST_TIMEOUT_MS,
+): Promise<{ event: { id: string; type: string; payload?: unknown } | null; timedOut: boolean }> {
+  const deadline = Date.now() + timeoutMs
+  while (Date.now() < deadline) {
+    const { events } = await readSupervisorEvents(cursor, 100)
+    for (const e of events) {
+      const payload = (e.payload ?? {}) as { request_id?: string }
+      if (requestId && payload.request_id === requestId && matchTypes.includes(e.type)) {
+        return { event: { id: e.id, type: e.type, payload: e.payload }, timedOut: false }
+      }
+    }
+    if (events.length === 0) {
+      await new Promise((r) => setTimeout(r, REQUEST_POLL_MS))
+    }
+  }
+  return { event: null, timedOut: true }
+}
+
+function fmtEventForConsole(e: { type: string; actor?: string; created_at?: string; payload?: unknown }): string {
+  const ts = e.created_at ?? ''
+  const who = e.actor ? ` ${e.actor}` : ''
+  const payload = e.payload && typeof e.payload === 'object' ? ` ${JSON.stringify(e.payload)}` : ''
+  return `${ts} ${e.type}${who}${payload}`.trim()
+}
+
+async function startCityImpl(cityName: string): Promise<{
+  output: string
+  ok: boolean
+  requestId?: string
+  error?: string
+}> {
+  try {
+    const csrf = `console-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`
+    const accepted = await DefaultService.postV0City(csrf, { dir: '.' })
+    const acceptedOk = unwrap(accepted as Envelope<{ event_cursor?: string; request_id?: string }>)
+    if (!acceptedOk) {
+      return {
+        output: 'city start rejected by supervisor',
+        ok: false,
+        error: (accepted as { detail?: string }).detail ?? 'invalid response',
+      }
+    }
+    const { event_cursor, request_id } = acceptedOk
+    const result = await awaitRequestResult(
+      request_id,
+      event_cursor,
+      ['request.result.city.create', 'request.failed'],
+    )
+    if (result.timedOut) {
+      return {
+        output: `city start accepted (request_id=${request_id}) but no completion event arrived within ${REQUEST_TIMEOUT_MS}ms`,
+        ok: true,
+        requestId: request_id,
+      }
+    }
+    if (result.event?.type === 'request.failed') {
+      const payload = (result.event.payload ?? {}) as { error?: string; message?: string }
+      return {
+        output: `city start failed: ${payload.error ?? payload.message ?? 'unknown error'}`,
+        ok: false,
+        requestId: request_id,
+        error: payload.error ?? payload.message,
+      }
+    }
+    return {
+      output: `city "${cityName}" started (request_id=${request_id})`,
+      ok: true,
+      requestId: request_id,
+    }
+  } catch (error) {
+    if (!silentIfOffline(error)) {
+      console.error('Failed to start city:', error)
+    }
+    return {
+      output: 'city start failed',
+      ok: false,
+      error: silentIfOffline(error)
+        ? 'gas city supervisor is not reachable'
+        : (error instanceof Error ? error.message : String(error)),
+    }
+  }
+}
+
+async function stopCityImpl(cityName: string): Promise<{
+  output: string
+  ok: boolean
+  requestId?: string
+  error?: string
+}> {
+  try {
+    const csrf = `console-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`
+    const accepted = await DefaultService.postV0CityByCityNameUnregister(csrf, cityName)
+    const acceptedOk = unwrap(accepted as Envelope<{ event_cursor?: string; request_id?: string }>)
+    if (!acceptedOk) {
+      return {
+        output: 'city stop rejected by supervisor',
+        ok: false,
+        error: (accepted as { detail?: string }).detail ?? 'invalid response',
+      }
+    }
+    const { event_cursor, request_id } = acceptedOk
+    const result = await awaitRequestResult(
+      request_id,
+      event_cursor,
+      ['request.result.city.unregister', 'request.failed'],
+    )
+    if (result.timedOut) {
+      return {
+        output: `city stop accepted (request_id=${request_id}) but no completion event arrived within ${REQUEST_TIMEOUT_MS}ms`,
+        ok: true,
+        requestId: request_id,
+      }
+    }
+    if (result.event?.type === 'request.failed') {
+      const payload = (result.event.payload ?? {}) as { error?: string; message?: string }
+      return {
+        output: `city stop failed: ${payload.error ?? payload.message ?? 'unknown error'}`,
+        ok: false,
+        requestId: request_id,
+        error: payload.error ?? payload.message,
+      }
+    }
+    return {
+      output: `city "${cityName}" stopped (request_id=${request_id})`,
+      ok: true,
+      requestId: request_id,
+    }
+  } catch (error) {
+    if (!silentIfOffline(error)) {
+      console.error('Failed to stop city:', error)
+    }
+    return {
+      output: 'city stop failed',
+      ok: false,
+      error: silentIfOffline(error)
+        ? 'gas city supervisor is not reachable'
+        : (error instanceof Error ? error.message : String(error)),
+    }
+  }
+}
+
+export const gcCityStart = createServerFn({ method: 'POST' })
+  .validator(z.object({ city: z.string().min(1).default('default').optional() }).optional())
+  .handler(async ({ data }) => {
+    return await startCityImpl(data?.city ?? CITY)
+  })
+
+export const gcCityStop = createServerFn({ method: 'POST' })
+  .validator(z.object({ city: z.string().min(1).default('default').optional() }).optional())
+  .handler(async ({ data }) => {
+    return await stopCityImpl(data?.city ?? CITY)
+  })
+
+/**
+ * Per-city rich status. Used by the supervisor popover to show agent /
+ * session / mail counts and to distinguish "supervisor up, no city"
+ * from "supervisor up, city running".
+ *
+ * `lite=true` omits the expensive store-health / session-count blocks
+ * so the LED can poll cheaply every few seconds.
+ */
+export const gcCityStatus = createServerFn({ method: 'GET' })
+  .validator(z.object({ city: z.string().min(1).default('default').optional(), lite: z.boolean().default(true).optional() }).optional())
+  .handler(async ({ data }) => {
+    const cityName = data?.city ?? CITY
+    try {
+      const res = await DefaultService.getV0CityByCityNameStatus(cityName, undefined, undefined, data?.lite ?? true)
+      const ok = unwrap(res as Envelope<{
+        name?: string
+        path?: string
+        agent_count?: number
+        agents?: { total?: number; running?: number; idle?: number; suspended?: number; error?: number }
+        sessions?: { total?: number; running?: number; idle?: number }
+        mail?: { total?: number; unread?: number }
+        work?: { open_beads?: number; closed_beads?: number }
+        partial?: boolean
+      }>)
+      if (!ok) {
+        return {
+          reachable: true as const,
+          city: cityName,
+          running: false as const,
+          agents: { total: 0, running: 0, idle: 0 },
+          sessions: { total: 0, running: 0 },
+          mail: { total: 0, unread: 0 },
+          work: { open: 0, closed: 0 },
+          partial: false,
+          error: (res as { detail?: string }).detail,
+        }
+      }
+      return {
+        reachable: true as const,
+        city: ok.name ?? cityName,
+        running: (ok.agents?.running ?? 0) > 0 || (ok.sessions?.running ?? 0) > 0,
+        agents: {
+          total: ok.agents?.total ?? ok.agent_count ?? 0,
+          running: ok.agents?.running ?? 0,
+          idle: ok.agents?.idle ?? 0,
+          suspended: ok.agents?.suspended ?? 0,
+          error: ok.agents?.error ?? 0,
+        },
+        sessions: {
+          total: ok.sessions?.total ?? 0,
+          running: ok.sessions?.running ?? 0,
+          idle: ok.sessions?.idle ?? 0,
+        },
+        mail: { total: ok.mail?.total ?? 0, unread: ok.mail?.unread ?? 0 },
+        work: { open: ok.work?.open_beads ?? 0, closed: ok.work?.closed_beads ?? 0 },
+        partial: ok.partial ?? false,
+      }
+    } catch (error) {
+      if (!silentIfOffline(error)) {
+        console.error('Failed to get city status:', error)
+      }
+      return {
+        reachable: false as const,
+        city: cityName,
+        running: false as const,
+        agents: { total: 0, running: 0, idle: 0 },
+        sessions: { total: 0, running: 0 },
+        mail: { total: 0, unread: 0 },
+        work: { open: 0, closed: 0 },
+        partial: false,
+        error: silentIfOffline(error) ? 'gas city supervisor is not reachable' : (error instanceof Error ? error.message : String(error)),
+      }
+    }
+  })
 
 export const gcHealth = createServerFn({ method: 'GET' }).handler(async () => {
   try {
     const response = await DefaultService.getHealth()
-    const ok = unwrap(response as Envelope<{ version?: string }>)
+    const ok = unwrap(response as Envelope<{ status?: string; build_id?: string; version?: string; cities_running?: number; cities_total?: number }>)
     if (!ok) {
       return {
         reachable: false as const,
@@ -372,30 +644,91 @@ export const gcHealth = createServerFn({ method: 'GET' }).handler(async () => {
         error: (response as { detail?: string }).detail,
       }
     }
+    // `SupervisorHealthOutputBody` exposes `status` ("ok") and `build_id`
+    // but no `version`. We fall back to "1.0.0" so the UI LED label
+    // stays sensible; a real version string would come from the
+    // supervisor's own `/version` endpoint (not yet exposed).
     return {
       reachable: true as const,
       baseUrl: 'http://localhost:3000',
-      version: ok.version || '1.0.0',
+      version: '1.0.0',
+      buildId: ok.build_id,
+      citiesRunning: ok.cities_running,
+      citiesTotal: ok.cities_total,
+      status: ok.status,
     }
   } catch (error) {
+    if (!silentIfOffline(error)) {
+      console.error('Failed to get health:', error)
+    }
+    // Surface a short, user-friendly reason. The raw axios dump (host,
+    // port, stack) is internal — the UI just needs to know it's down.
     return {
       reachable: false as const,
       baseUrl: 'http://localhost:3000',
       version: '1.0.0',
-      error: error instanceof Error ? error.message : String(error),
+      error: 'gas city supervisor is not reachable',
     }
   }
 })
 
 export const gcSupervisorLogs = createServerFn({ method: 'GET' })
-  .validator(z.object({ lines: z.number().int().min(1).max(5000).default(200).optional() }))
+  .validator(z.object({ lines: z.number().int().min(1).max(5000).default(200).optional() }).optional())
   .handler(async ({ data }) => {
-    return { output: 'Supervisor logs - not yet implemented via API', source: 'supervisor.log', lines: data?.lines ?? 200 }
+    const lines = data?.lines ?? 200
+    try {
+      // /v0/events takes a Go duration like "5m" for `since`; we ask for
+      // the last hour which comfortably covers a 200-line tail window.
+      const { events } = await readSupervisorEvents('1h', lines)
+      const output = events.length === 0
+        ? '(no supervisor events in the last hour)'
+        : events.map(fmtEventForConsole).join('\n')
+      return { output, source: 'gc://v0/events?since=1h', lines: events.length }
+    } catch (error) {
+      if (!silentIfOffline(error)) {
+        console.error('Failed to read supervisor logs:', error)
+      }
+      return {
+        output: silentIfOffline(error)
+          ? '(supervisor offline — no logs available)'
+          : `failed to read supervisor logs: ${error instanceof Error ? error.message : String(error)}`,
+        source: 'gc://v0/events?since=1h',
+        lines: 0,
+      }
+    }
   })
 
-export const gcSupervisorRestart = createServerFn({ method: 'POST' }).handler(async () => {
-  return { output: 'GC supervisor restart - not yet implemented via API', ok: true, error: undefined as string | undefined }
-})
+export const gcSupervisorRestart = createServerFn({ method: 'POST' })
+  .validator(z.object({ city: z.string().min(1).default('default').optional() }).optional())
+  .handler(async ({ data }) => {
+    const cityName = data?.city ?? CITY
+    // The `gc` supervisor daemon is a separate OS process — it has no
+    // restart endpoint in the API. The most useful "restart" the console
+    // can do for the operator is cycle the running city: stop, wait for
+    // unregister confirmation, start. The operator is informed via the
+    // action console that the daemon itself wasn't restarted.
+    const stopResult = await stopCityImpl(cityName)
+    if (!stopResult.ok) {
+      return {
+        output: `restart aborted: city stop failed (${stopResult.error ?? 'unknown'})`,
+        ok: false as const,
+        error: stopResult.error,
+      }
+    }
+    const startResult = await startCityImpl(cityName)
+    if (!startResult.ok) {
+      return {
+        output: `restart partially failed: city stopped but start failed (${startResult.error ?? 'unknown'})`,
+        ok: false as const,
+        error: startResult.error,
+      }
+    }
+    return {
+      output: `city "${cityName}" restarted (stop + start). Note: the gc supervisor daemon itself is not restarted — restart it via your process manager if needed.`,
+      ok: true as const,
+      error: undefined as string | undefined,
+    }
+  })
 
 export const gcVersion = createServerFn({ method: 'GET' }).handler(async () => {
   try {
@@ -403,7 +736,9 @@ export const gcVersion = createServerFn({ method: 'GET' }).handler(async () => {
     const ok = unwrap(response as Envelope<{ version?: string }>)
     return { version: ok?.version || '1.0.0' }
   } catch (error) {
-    console.error('Failed to get version:', error)
+    if (!silentIfOffline(error)) {
+      console.error('Failed to get version:', error)
+    }
     return { version: '1.0.0' }
   }
 })
@@ -423,7 +758,9 @@ export const gcListAgents = createServerFn({ method: 'GET' })
         dir: agent.dir,
       }))
     } catch (error) {
-      console.error('Failed to list agents:', error)
+      if (!silentIfOffline(error)) {
+        console.error('Failed to list agents:', error)
+      }
       return []
     }
   })
@@ -440,7 +777,9 @@ export const gcListCities = createServerFn({ method: 'GET' }).handler(async () =
       active: city.active || false,
     }))
   } catch (error) {
-    console.error('Failed to list cities:', error)
+    if (!silentIfOffline(error)) {
+      console.error('Failed to list cities:', error)
+    }
     return []
   }
 })
@@ -456,7 +795,9 @@ export const gcListFormulas = createServerFn({ method: 'GET' }).handler(async ()
       contract: formula.contract,
     }))
   } catch (error) {
-    console.error('Failed to list formulas:', error)
+    if (!silentIfOffline(error)) {
+      console.error('Failed to list formulas:', error)
+    }
     return []
   }
 })
@@ -475,7 +816,9 @@ export const gcListSessions = createServerFn({ method: 'GET' }).handler(async ()
       last_activity_at: session.last_activity_at,
     }))
   } catch (error) {
-    console.error('Failed to list sessions:', error)
+    if (!silentIfOffline(error)) {
+      console.error('Failed to list sessions:', error)
+    }
     return []
   }
 })
@@ -549,7 +892,9 @@ export const gcListBeads = createServerFn({ method: 'GET' })
       }
       return items
     } catch (error) {
-      console.error('Failed to list beads:', error)
+      if (!silentIfOffline(error)) {
+        console.error('Failed to list beads:', error)
+      }
       return []
     }
   })
@@ -580,7 +925,9 @@ export const gcListPacks = createServerFn({ method: 'GET' }).handler(async () =>
       builtin: pack.builtin || false,
     }))
   } catch (error) {
-    console.error('Failed to list packs:', error)
+    if (!silentIfOffline(error)) {
+      console.error('Failed to list packs:', error)
+    }
     return []
   }
 })
@@ -626,7 +973,9 @@ export const gcListOrders = createServerFn({ method: 'GET' }).handler(async () =
       due: order.due,
     }))
   } catch (error) {
-    console.error('Failed to list orders:', error)
+    if (!silentIfOffline(error)) {
+      console.error('Failed to list orders:', error)
+    }
     return []
   }
 })
@@ -655,7 +1004,9 @@ export const gcOrderShow = createServerFn({ method: 'GET' })
         output: ok?.output ?? '',
       } as any
     } catch (error) {
-      console.error('Failed to show order:', error)
+      if (!silentIfOffline(error)) {
+        console.error('Failed to show order:', error)
+      }
       return { order: null, raw: '', output: '' } as any
     }
   })
@@ -677,7 +1028,9 @@ export const gcMailInbox = createServerFn({ method: 'GET' })
         unread: msg.unread || false,
       }))
     } catch (error) {
-      console.error('Failed to get mail inbox:', error)
+      if (!silentIfOffline(error)) {
+        console.error('Failed to get mail inbox:', error)
+      }
       return []
     }
   })
@@ -707,7 +1060,9 @@ export const gcFormulaRunStatus = createServerFn({ method: 'GET' })
         steps: [] as { id: string; name: string; status: 'idle' | 'running' | 'completed' | 'error' }[],
       }
     } catch (error) {
-      console.error('Failed to get formula run status:', error)
+      if (!silentIfOffline(error)) {
+        console.error('Failed to get formula run status:', error)
+      }
       return { status: 'idle' as const, steps: [] as { id: string; name: string; status: 'idle' | 'running' | 'completed' | 'error' }[] }
     }
   })
@@ -723,7 +1078,9 @@ export const gcFormulaShow = createServerFn({ method: 'GET' })
         raw: ok ? JSON.stringify(ok, null, 2) : '',
       }
     } catch (error) {
-      console.error('Failed to show formula:', error)
+      if (!silentIfOffline(error)) {
+        console.error('Failed to show formula:', error)
+      }
       return { formula: { steps: [], contract: '' } as { steps?: any[]; contract?: string }, raw: '' }
     }
   })
