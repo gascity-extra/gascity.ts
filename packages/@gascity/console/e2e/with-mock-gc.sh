@@ -4,8 +4,14 @@
 # of Vite via the trap, so when Playwright SIGTERMs the wrapper, the
 # mock gets reaped too.
 #
+# The mock gates itself on ALLOW_GC_MOCK=1 to make it impossible to
+# shadow a real `gc` daemon by accident. Setting it here is the
+# single canonical way to opt into mock mode for e2e.
+#
 # Env (with defaults):
-#   MOCK_GC_PORT       - port the mock listens on (default 8372)
+#   MOCK_GC_PORT       - port the mock listens on (default 8780; NOT
+#                        8372 so it can never silently shadow a real
+#                        gc daemon on the operator's machine)
 #   GC_API_BASE_URL    - Vite's proxy target for /gc/* (default
 #                        http://127.0.0.1:${MOCK_GC_PORT})
 #   E2E_PORT           - port Vite listens on (default 3100)
@@ -13,14 +19,14 @@
 # On failure to bring up the mock, dump its log to stderr and exit 1.
 set -euo pipefail
 
-MOCK_GC_PORT="${MOCK_GC_PORT:-8372}"
+MOCK_GC_PORT="${MOCK_GC_PORT:-8780}"
 GC_API_BASE_URL="${GC_API_BASE_URL:-http://127.0.0.1:${MOCK_GC_PORT}}"
 E2E_PORT="${E2E_PORT:-3100}"
 
 LOG="${TMPDIR:-/tmp}/mock-gc-supervisor.log"
 echo "[with-mock-gc] starting mock-gc on :${MOCK_GC_PORT} (log=${LOG})" >&2
 
-MOCK_GC_PORT="${MOCK_GC_PORT}" bun e2e/mock-gc-supervisor.ts >"${LOG}" 2>&1 &
+ALLOW_GC_MOCK=1 MOCK_GC_PORT="${MOCK_GC_PORT}" bun e2e/mock-gc-supervisor.ts >"${LOG}" 2>&1 &
 MOCK_PID=$!
 trap "kill ${MOCK_PID} 2>/dev/null || true" EXIT
 

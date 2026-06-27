@@ -28,7 +28,11 @@ const POPOVER_TESTID = {
 
 const MOCK_GC_BASE =
     (typeof process !== "undefined" && process.env?.MOCK_GC_BASE_URL) ||
-    "http://127.0.0.1:8372";
+    // 8780 is the mock's default port (deliberately not 8372 so it
+    // can't shadow a real `gc`). The e2e wrapper / Playwright config
+    // set MOCK_GC_PORT explicitly; this default matches the mock's
+    // own default.
+    `http://127.0.0.1:${process.env.MOCK_GC_PORT ?? 8780}`;
 
 /** Reset the mock to a known state between specs. */
 async function resetMock(request: APIRequestContext): Promise<void> {

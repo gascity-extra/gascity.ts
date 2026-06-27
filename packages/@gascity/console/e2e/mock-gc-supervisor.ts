@@ -5,13 +5,31 @@
  * Speaks just enough of the GC OpenAPI surface to drive the console
  * supervisor panel (start / stop / restart / status / logs / health).
  * Not a complete implementation — anything we don't need for the panel
- * returns 404. Designed to run as a background process for mock-e2e
- * and to be replaceable by the real `gc` daemon for real-e2e.
+ * returns 404.
+ *
+ * ## Safety: this is a test fixture, not a development backend
+ *
+ * The mock defaults to a **non-standard port** (8780, not 8372) so it
+ * can never silently shadow a real `gc` daemon on the operator's
+ * machine. To make this explicit, the startup banner shouts `MOCK`
+ * in red, and every response carries an `X-Gc-Mock: 1` header so a
+ * developer who accidentally pointed their browser DevTools at it
+ * can tell at a glance.
+ *
+ * The mock also refuses to run unless either:
+ *   - `ALLOW_GC_MOCK=1` is set in the environment (only set by the
+ *     e2e wrapper scripts `e2e/with-mock-gc.sh` and the mock Playwright
+ *     config), OR
+ *   - The process is running under `bun test` (Playwright test mode).
+ *
+ * If neither condition holds, the process prints a loud refusal and
+ * exits with code 2. This makes "I forgot the env var" loud instead
+ * of silently booting a fake backend.
  *
  * Usage:
- *   bun run e2e/mock-gc-supervisor.ts           # listens on $MOCK_GC_PORT or 8372
- *   MOCK_GC_PORT=9001 bun run ...               # custom port
- *   bun run e2e/mock-gc-supervisor.ts --reset   # POST /__reset clears state
+ *   ALLOW_GC_MOCK=1 bun run e2e/mock-gc-supervisor.ts
+ *   # or via the wrapper:
+ *   ./e2e/with-mock-gc.sh
  *
  * State model: a single mutable city `default`. start/stop transitions
  * the city between `stopped` and `running`. Each successful transition
@@ -22,8 +40,66 @@
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http'
 import { randomUUID } from 'node:crypto'
 
-const PORT = Number(process.env.MOCK_GC_PORT ?? 8372)
+// Default port is intentionally NOT 8372 (the real `gc` default). The
+// e2e wrapper / Playwright config set MOCK_GC_PORT explicitly when they
+// want a specific port; if you run this script directly, 8780 is what
+// you get — a port the real `gc` would never use.
+const DEFAULT_PORT = 8780
+const PORT = Number(process.env.MOCK_GC_PORT ?? DEFAULT_PORT)
 const SUPERVISOR_VERSION = '1.4.2-mock'
+
+const ALLOW_FLAG = process.env.ALLOW_GC_MOCK === '1'
+const UNDER_TEST =
+    // Playwright sets NODE_ENV / npm_lifecycle_event when running tests.
+    process.env.NODE_ENV === 'test' ||
+    !!process.env.PLAYWRIGHT_TEST_BASE_URL ||
+    (process.env.npm_lifecycle_event ?? '').startsWith('test')
+
+if (!ALLOW_FLAG && !UNDER_TEST) {
+    console.error(
+        [
+            '',
+            '\x1b[31m============================================================\x1b[0m',
+            '\x1b[31m  REFUSED: this is a TEST-ONLY mock, not a dev backend.\x1b[0m',
+            '\x1b[31m============================================================\x1b[0m',
+            '',
+            '  To run the mock:',
+            '    ALLOW_GC_MOCK=1 bun run e2e/mock-gc-supervisor.ts',
+            '',
+            '  Or use the wrapper that brings up mock + vite together:',
+            '    ./e2e/with-mock-gc.sh',
+            '',
+            '  To run real e2e against a real gc, set GC_API_BASE_URL to a',
+            '  running supervisor and start vite normally.',
+            '',
+            '  See e2e/with-mock-gc.sh and playwright.mock.config.ts for',
+            '  the wiring details.',
+            '',
+        ].join('\n'),
+    )
+    process.exit(2)
+}
+
+const RED = '\x1b[31m'
+const YELLOW = '\x1b[33m'
+const RESET = '\x1b[0m'
+
+process.stdout.write(
+    [
+        '',
+        `${RED}============================================================${RESET}`,
+        `${RED}  MOCK GC SUPERVISOR (test fixture — NOT a real backend)${RESET}`,
+        `${RED}============================================================${RESET}`,
+        '',
+        `  Port: ${YELLOW}${PORT}${RESET}`,
+        `  Version: ${YELLOW}${SUPERVISOR_VERSION}${RESET}`,
+        '',
+        `  Every response is tagged with ${YELLOW}X-Gc-Mock: 1${RESET} so you`,
+        '  can spot this in DevTools. To use a real backend, set',
+        '  GC_API_BASE_URL to a running `gc` supervisor and restart vite.',
+        '',
+    ].join('\n'),
+)
 
 type CityPhase = 'running' | 'stopped'
 interface CityState {
@@ -108,12 +184,14 @@ function asyncAccepted(req: IncomingMessage, res: ServerResponse, requestType: s
     }, 150)
     res.statusCode = 202
     res.setHeader('content-type', 'application/json')
+    res.setHeader('x-gc-mock', '1')
     res.end(JSON.stringify({ event_cursor: String(state.nextEventId), request_id: requestId }))
 }
 
 function json(res: ServerResponse, status: number, body: unknown) {
     res.statusCode = status
     res.setHeader('content-type', 'application/json')
+    res.setHeader('x-gc-mock', '1')
     res.end(JSON.stringify(body))
 }
 

@@ -16,7 +16,11 @@
 
 import { defineConfig, devices } from "@playwright/test";
 
-const MOCK_GC_PORT = Number(process.env.MOCK_GC_PORT ?? 8372);
+// Mock listens on 8780 by default — NOT 8372 — so it can never
+// silently shadow a real `gc` daemon on the operator's machine. The
+// e2e wrapper sets ALLOW_GC_MOCK=1 because the mock itself refuses
+// to run without that opt-in flag.
+const MOCK_GC_PORT = Number(process.env.MOCK_GC_PORT ?? 8780);
 const GC_API_BASE_URL = `http://127.0.0.1:${MOCK_GC_PORT}`;
 const E2E_PORT = Number(process.env.MOCK_E2E_PORT ?? 3100);
 const BASE_URL = `http://localhost:${E2E_PORT}`;
