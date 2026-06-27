@@ -804,6 +804,19 @@ async function startSupervisorImpl(): Promise<{
       ok: true,
     }
   }
+  // Special-case ENOENT (binary not on PATH). This is the most common
+  // operator error and the raw "spawn gc ENOENT" message is opaque.
+  // Tell them exactly what's wrong and how to fix it.
+  if (result.code === -1 && /^spawn .* ENOENT/.test(result.stderr)) {
+    return {
+      output:
+        'gc binary not found in PATH. Install the `gc` CLI on the host ' +
+        'and ensure `which gc` resolves, or set GC_BIN=/absolute/path/to/gc ' +
+        'before starting vite.',
+      ok: false,
+      error: 'gc binary not found in PATH',
+    }
+  }
   return {
     output: `gc start failed (exit=${result.code}): ${(result.stderr || result.stdout).trim().slice(0, 500)}`,
     ok: false,

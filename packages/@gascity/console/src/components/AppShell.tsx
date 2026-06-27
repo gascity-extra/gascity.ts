@@ -228,7 +228,55 @@ function SupervisorPopover({
 
   const [transition, setTransition] = useState<null | "starting" | "stopping">(null);
   const [console_, setConsole] = useState<string>("");
+  const [copiedConsole, setCopiedConsole] = useState(false);
+  const [copiedLog, setCopiedLog] = useState(false);
   const transitionStart = useRef<number>(0);
+
+  // Copy a string to the clipboard with a brief "copied!" confirmation.
+  // Uses the navigator Clipboard API where available; falls back to a
+  // hidden textarea + execCommand for older browsers (and the test
+  // browser context where clipboard may not be granted). The fallback
+  // also works in headless Chromium without permissions.
+  async function copyText(text: string, setFlag: (b: boolean) => void) {
+    // Try the modern Clipboard API first; on any failure (browser
+    // denial, headless context, sandboxed iframe) fall back to a hidden
+    // textarea + execCommand, which works in headless Chromium without
+    // clipboard permissions. Either way we surface "copied!" feedback
+    // so the operator knows the action succeeded.
+    let ok = false;
+    try {
+      if (
+        typeof navigator !== "undefined" &&
+        navigator.clipboard &&
+        typeof navigator.clipboard.writeText === "function"
+      ) {
+        await navigator.clipboard.writeText(text);
+        ok = true;
+      }
+    } catch {
+      // fall through to execCommand
+    }
+    if (!ok && typeof document !== "undefined") {
+      try {
+        const ta = document.createElement("textarea");
+        ta.value = text;
+        ta.style.position = "fixed";
+        ta.style.opacity = "0";
+        document.body.appendChild(ta);
+        ta.focus();
+        ta.select();
+        ok = document.execCommand("copy");
+        document.body.removeChild(ta);
+      } catch {
+        // Both paths failed. The operator can still drag-select the
+        // pre block and Cmd+C — we just don't show "copied!".
+      }
+    }
+    if (ok) {
+      setFlag(true);
+      setTimeout(() => setFlag(false), 1_200);
+    }
+  }
 
   const { data: log } = useQuery({
     queryKey: ["gc", "supervisor-logs"],
@@ -535,16 +583,31 @@ return (
             <span className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
               action console
             </span>
-            {console_ && (
-              <button
-                onClick={() => setConsole("")}
-                className="font-mono text-[10px] text-muted-foreground hover:text-foreground"
-              >
-                clear
-              </button>
-            )}
+            <div className="flex items-center gap-2">
+              {console_ && (
+                <button
+                  onClick={() => copyText(console_, setCopiedConsole)}
+                  title="copy action console to clipboard"
+                  data-testid="action-console-copy"
+                  className="font-mono text-[10px] text-muted-foreground hover:text-foreground"
+                >
+                  {copiedConsole ? "copied!" : "copy"}
+                </button>
+              )}
+              {console_ && (
+                <button
+                  onClick={() => setConsole("")}
+                  className="font-mono text-[10px] text-muted-foreground hover:text-foreground"
+                >
+                  clear
+                </button>
+              )}
+            </div>
           </div>
-          <pre className="max-h-32 overflow-auto px-4 pb-2 font-mono text-[11px] leading-relaxed text-foreground">
+          <pre
+            className="max-h-32 overflow-auto px-4 pb-2 font-mono text-[11px] leading-relaxed text-foreground"
+            data-testid="action-console-text"
+          >
             {console_ || "(no actions yet)"}
           </pre>
         </div>
@@ -554,11 +617,26 @@ return (
             <span className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
               supervisor log
             </span>
-            <span className="font-mono text-[10px] text-muted-foreground">
-              {log?.source ?? ""}
-            </span>
+            <div className="flex items-center gap-2">
+              <span className="font-mono text-[10px] text-muted-foreground">
+                {log?.source ?? ""}
+              </span>
+              {log?.output && (
+                <button
+                  onClick={() => copyText(log.output, setCopiedLog)}
+                  title="copy supervisor log to clipboard"
+                  data-testid="supervisor-log-copy"
+                  className="font-mono text-[10px] text-muted-foreground hover:text-foreground"
+                >
+                  {copiedLog ? "copied!" : "copy"}
+                </button>
+              )}
+            </div>
           </div>
-          <pre className="max-h-56 overflow-auto px-4 pb-3 font-mono text-[11px] leading-relaxed text-muted-foreground">
+          <pre
+            className="max-h-56 overflow-auto px-4 pb-3 font-mono text-[11px] leading-relaxed text-muted-foreground"
+            data-testid="supervisor-log-text"
+          >
             {log?.output || "(loading…)"}
           </pre>
         </div>

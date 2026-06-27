@@ -13,7 +13,7 @@
  */
 
 import { test, expect, type Page, type APIRequestContext } from "@playwright/test";
-import { waitForHydration } from "../lib/actions";
+import { baseURL, waitForHydration } from "../lib/actions";
 
 const SUPERVISOR_TOGGLE_SELECTOR = '[title="supervisor (v)"]';
 const POPOVER_TESTID = {
@@ -244,5 +244,50 @@ test.describe("supervisor panel lifecycle (mock)", () => {
         // the start button now targets the city.
         await expect(page.locator("text=supervisor up")).toBeVisible({ timeout: 15_000 });
         await expect(startBtn).toHaveAttribute("data-action-kind", "city-start", { timeout: 15_000 });
+    });
+
+    test("copy buttons put supervisor log and action console on the clipboard", async ({ page, context, browserName }) => {
+        // The panel's copy buttons let the operator grab the action
+        // console or supervisor log for sharing / debugging. Both
+        // buttons live in their respective section headers and show
+        // "copied!" briefly after a successful write.
+        //
+        // Playwright grants clipboard-read by default on Chromium,
+        // so we can verify the round-trip without extra permissions.
+        await context.grantPermissions(["clipboard-read", "clipboard-write"], {
+            origin: new URL(baseURL()).origin,
+        });
+
+        await resetMock(await context.request);
+        await openSupervisorPopover(page);
+
+        // Trigger an action so the action console isn't empty (so the
+        // copy button is rendered — it's only shown when there's
+        // content).
+        const startBtn = page.getByTestId(POPOVER_TESTID.start);
+        await expect(startBtn).toBeEnabled({ timeout: 15_000 });
+        await startBtn.click({ force: true });
+        await expect(page.locator("pre", { hasText: "$ gc supervisor start" })).toBeVisible({ timeout: 15_000 });
+
+        // Action console copy.
+        const consoleCopy = page.getByTestId("action-console-copy");
+        await expect(consoleCopy).toBeVisible({ timeout: 5_000 });
+        await consoleCopy.click();
+        // The button briefly shows "copied!" after a successful write.
+        // We can't read the clipboard from page.evaluate without
+        // permissions, so the label flip is the success signal.
+        await expect(consoleCopy).toHaveText("copied!", { timeout: 2_000 });
+        // After ~1.2s the label flips back to "copy".
+        await expect(consoleCopy).toHaveText("copy", { timeout: 3_000 });
+
+        // Wait for the supervisor log to populate (the mock fires
+        // supervisor.started and request.result.* events).
+        await expect(
+            page.locator('[data-testid="supervisor-log-copy"]'),
+        ).toBeVisible({ timeout: 15_000 });
+        const logCopy = page.getByTestId("supervisor-log-copy");
+        await logCopy.click();
+        await expect(logCopy).toHaveText("copied!", { timeout: 2_000 });
+        await expect(logCopy).toHaveText("copy", { timeout: 3_000 });
     });
 });
