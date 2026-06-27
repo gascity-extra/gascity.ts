@@ -698,37 +698,212 @@ export const gcSupervisorLogs = createServerFn({ method: 'GET' })
     }
   })
 
-export const gcSupervisorRestart = createServerFn({ method: 'POST' })
-  .validator(z.object({ city: z.string().min(1).default('default').optional() }).optional())
-  .handler(async ({ data }) => {
-    const cityName = data?.city ?? CITY
-    // The `gc` supervisor daemon is a separate OS process — it has no
-    // restart endpoint in the API. The most useful "restart" the console
-    // can do for the operator is cycle the running city: stop, wait for
-    // unregister confirmation, start. The operator is informed via the
-    // action console that the daemon itself wasn't restarted.
-    const stopResult = await stopCityImpl(cityName)
+// Supervisor daemon lifecycle
+// -----------------------------------------------------------------------------
+// The `gc` supervisor itself is a separate OS process — it has no REST
+// endpoint for start/stop/restart because the API only knows how to talk
+// to a supervisor that's already running. The console drives the daemon
+// by shelling out to the `gc` CLI, with the same safety patterns as the
+// tmux helpers above: allow-list the binary path, spawn with a minimal
+// fixed environment (not `process.env`), and validate args before exec.
+
+const GC_BIN_RE = /^[a-zA-Z0-9_./-]+$/
+
+function safeGcBin(): string {
+  const bin = process.env.GC_BIN ?? 'gc'
+  if (!GC_BIN_RE.test(bin)) {
+    throw new Error(`invalid GC_BIN env (${bin})`)
+  }
+  return bin
+}
+
+/**
+ * Spawn the `gc` CLI and collect stdout/stderr/exit. The CLI is
+ * synchronous (returns when the operation completes), so unlike the
+ * city-level operations we don't need to poll /v0/events — the spawn
+ * exit IS the completion signal.
+ *
+ * Set `GC_BIN` to override the binary path (e.g. `/opt/gc/bin/gc`).
+ */
+async function runGc(
+  args: string[],
+  opts: { timeoutMs?: number } = {},
+): Promise<{ ok: boolean; stdout: string; stderr: string; code: number }> {
+  const { spawn } = await import('node:child_process')
+  const bin = safeGcBin()
+  return await new Promise((resolve) => {
+    const child = spawn(bin, args, {
+      stdio: ['pipe', 'pipe', 'pipe'],
+      env: {
+        TERM: 'dumb',
+        PATH: process.env.PATH ?? '/usr/local/bin:/usr/bin:/bin',
+        HOME: process.env.HOME ?? '/tmp',
+        LANG: process.env.LANG ?? 'C.UTF-8',
+      },
+    })
+    const stdout: Buffer[] = []
+    const stderr: Buffer[] = []
+    let settled = false
+    const timer = setTimeout(() => {
+      if (settled) return
+      settled = true
+      try {
+        child.kill('SIGKILL')
+      } catch {
+        /* ignore */
+      }
+      resolve({
+        ok: false,
+        stdout: Buffer.concat(stdout).toString('utf8'),
+        stderr: `timeout after ${opts.timeoutMs ?? 15000}ms`,
+        code: -1,
+      })
+    }, opts.timeoutMs ?? 15_000)
+    child.stdout.on('data', (b: Buffer) => stdout.push(b))
+    child.stderr.on('data', (b: Buffer) => stderr.push(b))
+    child.on('error', (err) => {
+      if (settled) return
+      settled = true
+      clearTimeout(timer)
+      resolve({ ok: false, stdout: '', stderr: err.message, code: -1 })
+    })
+    child.on('close', (code) => {
+      if (settled) return
+      settled = true
+      clearTimeout(timer)
+      resolve({
+        ok: code === 0,
+        stdout: Buffer.concat(stdout).toString('utf8'),
+        stderr: Buffer.concat(stderr).toString('utf8'),
+        code: code ?? -1,
+      })
+    })
+    child.stdin.end()
+  })
+}
+
+async function startSupervisorImpl(): Promise<{
+  output: string
+  ok: boolean
+  error?: string
+}> {
+  // `gc start` is idempotent — if the supervisor is already running it
+  // typically exits non-zero with a "already running" message. We
+  // surface that case as ok=true with a note so the operator's action
+  // console reflects the truth (no spurious error).
+  const result = await runGc(['start'], { timeoutMs: 30_000 })
+  if (result.ok) {
+    return {
+      output: 'gc supervisor started',
+      ok: true,
+    }
+  }
+  if (/already\s+running/i.test(result.stdout) || /already\s+running/i.test(result.stderr)) {
+    return {
+      output: 'gc supervisor already running',
+      ok: true,
+    }
+  }
+  return {
+    output: `gc start failed (exit=${result.code}): ${(result.stderr || result.stdout).trim().slice(0, 500)}`,
+    ok: false,
+    error: (result.stderr || result.stdout).trim().slice(0, 500),
+  }
+}
+
+async function stopSupervisorImpl(): Promise<{
+  output: string
+  ok: boolean
+  error?: string
+}> {
+  const result = await runGc(['stop'], { timeoutMs: 30_000 })
+  if (result.ok) {
+    return {
+      output: 'gc supervisor stopped',
+      ok: true,
+    }
+  }
+  if (/not\s+running|already\s+stopped|no such process/i.test(result.stderr)) {
+    return {
+      output: 'gc supervisor already stopped',
+      ok: true,
+    }
+  }
+  return {
+    output: `gc stop failed (exit=${result.code}): ${(result.stderr || result.stdout).trim().slice(0, 500)}`,
+    ok: false,
+    error: (result.stderr || result.stdout).trim().slice(0, 500),
+  }
+}
+
+/**
+ * Start the `gc` supervisor daemon (the operator's process manager is
+ * not involved — the console drives the binary directly). Idempotent:
+ * if the daemon is already running this reports ok with a note.
+ */
+export const gcSupervisorStart = createServerFn({ method: 'POST' }).handler(
+  async () => {
+    try {
+      return await startSupervisorImpl()
+    } catch (error) {
+      return {
+        output: 'gc start threw unexpectedly',
+        ok: false,
+        error: error instanceof Error ? error.message : String(error),
+      }
+    }
+  },
+)
+
+/**
+ * Stop the `gc` supervisor daemon. Idempotent: if the daemon isn't
+ * running this reports ok with a note.
+ */
+export const gcSupervisorStop = createServerFn({ method: 'POST' }).handler(
+  async () => {
+    try {
+      return await stopSupervisorImpl()
+    } catch (error) {
+      return {
+        output: 'gc stop threw unexpectedly',
+        ok: false,
+        error: error instanceof Error ? error.message : String(error),
+      }
+    }
+  },
+)
+
+/**
+ * Restart the `gc` supervisor daemon. Drives `gc stop` then `gc start`
+ * sequentially and reports the outcome of each phase. The city lifecycle
+ * is independent — restarting the daemon doesn't restart any city.
+ * Cities re-register on their own when the daemon comes back up.
+ */
+export const gcSupervisorRestart = createServerFn({ method: 'POST' }).handler(
+  async () => {
+    const stopResult = await stopSupervisorImpl()
     if (!stopResult.ok) {
       return {
-        output: `restart aborted: city stop failed (${stopResult.error ?? 'unknown'})`,
+        output: `restart aborted: ${stopResult.output}`,
         ok: false as const,
         error: stopResult.error,
       }
     }
-    const startResult = await startCityImpl(cityName)
+    const startResult = await startSupervisorImpl()
     if (!startResult.ok) {
       return {
-        output: `restart partially failed: city stopped but start failed (${startResult.error ?? 'unknown'})`,
+        output: `restart partially failed: stopped OK but ${startResult.output}`,
         ok: false as const,
         error: startResult.error,
       }
     }
     return {
-      output: `city "${cityName}" restarted (stop + start). Note: the gc supervisor daemon itself is not restarted — restart it via your process manager if needed.`,
+      output: `gc supervisor restarted (stop + start)`,
       ok: true as const,
       error: undefined as string | undefined,
     }
-  })
+  },
+)
 
 export const gcVersion = createServerFn({ method: 'GET' }).handler(async () => {
   try {

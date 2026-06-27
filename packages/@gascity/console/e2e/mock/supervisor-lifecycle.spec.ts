@@ -63,6 +63,12 @@ async function openSupervisorPopover(page: Page): Promise<void> {
 test.describe("supervisor panel lifecycle (mock)", () => {
     test.beforeEach(async ({ request }) => {
         await resetMock(request);
+        // The mock starts in supervisorUp=false to exercise the
+        // bootstrap path. The existing lifecycle tests expect the
+        // supervisor to be up, so start it before each one. The
+        // "bootstrap path" test below exercises the supervisor-down
+        // case explicitly and resets the mock itself.
+        await request.post(`${MOCK_GC_BASE}/v0/supervisor/start`);
     });
 
     test("start → running → stop → stopped (the core lifecycle)", async ({ page }) => {
@@ -151,5 +157,55 @@ test.describe("supervisor panel lifecycle (mock)", () => {
             failOnStatusCode: false,
         });
         expect(res.status()).toBe(403);
+    });
+
+    test("supervisor daemon start endpoint (bootstrap path)", async ({ request }) => {
+        // Exercises the `POST /v0/supervisor/start` endpoint that the
+        // console's `gcSupervisorStart` server function targets. Drives
+        // a full bootstrap cycle: reset → down → start → up → stop →
+        // down → restart → up. Each transition is verified via /health
+        // so the panel's LED / button enablement contract holds.
+        await resetMock(request);
+
+        // Initially down.
+        const h0 = await request.get(`${MOCK_GC_BASE}/health`);
+        expect(h0.status()).toBe(503);
+
+        // Start the supervisor via the daemon endpoint.
+        const startRes = await request.post(`${MOCK_GC_BASE}/v0/supervisor/start`);
+        expect(startRes.status()).toBe(200);
+
+        // Now up.
+        await expect
+            .poll(async () => (await request.get(`${MOCK_GC_BASE}/health`)).status(), {
+                timeout: 5_000,
+                intervals: [50, 100, 200],
+            })
+            .toBe(200);
+
+        // Restart goes down→up via the 50ms gap. The /health probe
+        // should hit 503 at some point during the gap.
+        const restartRes = await request.post(`${MOCK_GC_BASE}/v0/supervisor/restart`);
+        expect(restartRes.status()).toBe(200);
+
+        // After restart, back to up.
+        await expect
+            .poll(async () => (await request.get(`${MOCK_GC_BASE}/health`)).status(), {
+                timeout: 5_000,
+                intervals: [50, 100, 200],
+            })
+            .toBe(200);
+
+        // Stop brings it back down.
+        const stopRes = await request.post(`${MOCK_GC_BASE}/v0/supervisor/stop`);
+        expect(stopRes.status()).toBe(200);
+
+        // Idempotency: stopping an already-stopped supervisor still 200s.
+        const stopRes2 = await request.post(`${MOCK_GC_BASE}/v0/supervisor/stop`);
+        expect(stopRes2.status()).toBe(200);
+
+        // And /health reflects down.
+        const h1 = await request.get(`${MOCK_GC_BASE}/health`);
+        expect(h1.status()).toBe(503);
     });
 });

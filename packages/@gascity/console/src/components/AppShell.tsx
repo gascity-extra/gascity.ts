@@ -314,7 +314,7 @@ function SupervisorPopover({
     },
   });
   const restartMut = useMutation({
-    mutationFn: () => restart({ data: {} }),
+    mutationFn: () => restart(),
     onMutate: () => {
       setTransition("starting");
       transitionStart.current = Date.now();

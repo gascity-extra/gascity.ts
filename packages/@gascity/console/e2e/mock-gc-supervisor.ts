@@ -123,35 +123,29 @@ interface EventRecord {
 }
 
 interface State {
-    running: boolean
+    supervisorUp: boolean
     city: CityState
     events: EventRecord[]
     nextEventId: number
 }
 
 function freshState(): State {
-    const now = new Date().toISOString()
+    // Start in a "supervisor down, no city" state so e2e specs can
+    // exercise the bootstrap path (start supervisor → start city) from
+    // the very first interaction.
     return {
-        running: true, // supervisor itself is "running" the moment the mock starts
+        supervisorUp: false,
         city: {
             name: 'default',
-            phase: 'stopped', // but no city yet
+            phase: 'stopped',
             path: '/tmp/gc-mock/default',
             agents: { total: 0, running: 0, idle: 0, suspended: 0, error: 0 },
             sessions: { total: 0, running: 0, idle: 0 },
             mail: { total: 0, unread: 0 },
             work: { open: 0, closed: 0 },
         },
-        events: [
-            {
-                id: 1,
-                type: 'supervisor.started',
-                actor: 'mock-gc',
-                created_at: now,
-                payload: { version: SUPERVISOR_VERSION },
-            },
-        ],
-        nextEventId: 2,
+        events: [],
+        nextEventId: 1,
     }
 }
 
@@ -177,10 +171,21 @@ function asyncAccepted(req: IncomingMessage, res: ServerResponse, requestType: s
         return
     }
     const requestId = randomUUID()
-    // Emit the corresponding request.result.* after a short delay so
-    // the console's `awaitRequestResult` poller observes it.
+    // Capture the state reference at request time so the deferred
+    // completion event lands in the state the caller actually saw.
+    // Without this, a `__reset` between request and setTimeout fire
+    // would cause the event to land in the NEW state, "promoting"
+    // the next test's mock to look like a previous test's request
+    // succeeded.
+    const capturedState = state
     setTimeout(() => {
-        recordEvent(`request.result.${requestType}`, { request_id: requestId, ...payload })
+        capturedState.events.push({
+            id: capturedState.nextEventId++,
+            type: `request.result.${requestType}`,
+            actor: 'mock-gc',
+            created_at: new Date().toISOString(),
+            payload: { request_id: requestId, ...payload },
+        })
     }, 150)
     res.statusCode = 202
     res.setHeader('content-type', 'application/json')
@@ -217,6 +222,12 @@ const server = createServer(async (req, res) => {
 
     // --- supervisor surface ---
     if (route === 'GET /health') {
+        // When the supervisor is down, /health returns 503 so the
+        // console's `gcHealth` server function reports `reachable:false`
+        // and the panel correctly disables every action button.
+        if (!state.supervisorUp) {
+            return json(res, 503, { detail: 'mock-gc supervisor is down' })
+        }
         return json(res, 200, {
             status: 'ok',
             build_id: `mock-${SUPERVISOR_VERSION}`,
@@ -225,6 +236,9 @@ const server = createServer(async (req, res) => {
         })
     }
     if (route === 'GET /v0/cities') {
+        if (!state.supervisorUp) {
+            return json(res, 503, { detail: 'mock-gc supervisor is down' })
+        }
         return json(res, 200, {
             items: [
                 {
@@ -236,7 +250,62 @@ const server = createServer(async (req, res) => {
             ],
         })
     }
+    // Supervisor daemon lifecycle. In production these endpoints don't
+    // exist — the daemon is a separate OS process and the console drives
+    // it via the `gc` CLI (see `gcSupervisorStart` in gc.functions.ts).
+    // The mock exposes them so e2e tests can exercise the bootstrap
+    // path end-to-end.
+    if (route === 'POST /v0/supervisor/start') {
+        if (state.supervisorUp) {
+            return json(res, 200, { detail: 'already running' })
+        }
+        state.supervisorUp = true
+        // Drop any leftover city — when the daemon restarts after being
+        // fully down, cities re-register on their own. Keeping stale
+        // city state here would be misleading.
+        state.city.phase = 'stopped'
+        state.city.agents = { total: 0, running: 0, idle: 0, suspended: 0, error: 0 }
+        state.city.sessions = { total: 0, running: 0, idle: 0 }
+        state.city.mail = { total: 0, unread: 0 }
+        state.city.work = { open: 0, closed: 0 }
+        recordEvent('supervisor.started', { version: SUPERVISOR_VERSION })
+        return json(res, 200, { status: 'ok' })
+    }
+    if (route === 'POST /v0/supervisor/stop') {
+        if (!state.supervisorUp) {
+            return json(res, 200, { detail: 'already stopped' })
+        }
+        state.supervisorUp = false
+        state.city.phase = 'stopped'
+        state.city.agents = { total: 0, running: 0, idle: 0, suspended: 0, error: 0 }
+        state.city.sessions = { total: 0, running: 0, idle: 0 }
+        recordEvent('supervisor.stopped', {})
+        return json(res, 200, { status: 'ok' })
+    }
+    if (route === 'POST /v0/supervisor/restart') {
+        state.supervisorUp = false
+        state.city.phase = 'stopped'
+        state.city.agents = { total: 0, running: 0, idle: 0, suspended: 0, error: 0 }
+        state.city.sessions = { total: 0, running: 0, idle: 0 }
+        recordEvent('supervisor.stopped', {})
+        // Tiny gap so consumers see the "down" frame between stop and
+        // start; mirrors the gap in the real `gc restart` lifecycle.
+        setTimeout(() => {
+            state.supervisorUp = true
+            recordEvent('supervisor.started', { version: SUPERVISOR_VERSION })
+        }, 50)
+        return json(res, 200, { status: 'ok' })
+    }
     if (route === 'POST /v0/city') {
+        // Check the anti-CSRF header BEFORE checking supervisor
+        // reachability so a missing header returns 403 (the wire-level
+        // invariant the console relies on) rather than 503.
+        if (!req.headers['x-gc-request']) {
+            return json(res, 403, { detail: 'X-GC-Request header required' })
+        }
+        if (!state.supervisorUp) {
+            return json(res, 503, { detail: 'mock-gc supervisor is down' })
+        }
         if (state.city.phase === 'running') {
             return json(res, 409, { detail: `city "${state.city.name}" already running` })
         }
@@ -250,6 +319,15 @@ const server = createServer(async (req, res) => {
     }
     const unregisterMatch = route.match(/^POST \/v0\/city\/([^/]+)\/unregister$/)
     if (unregisterMatch) {
+        // Anti-CSRF header checked first so missing header → 403 (the
+        // contract the console relies on), not 503 (which signals
+        // "supervisor down").
+        if (!req.headers['x-gc-request']) {
+            return json(res, 403, { detail: 'X-GC-Request header required' })
+        }
+        if (!state.supervisorUp) {
+            return json(res, 503, { detail: 'mock-gc supervisor is down' })
+        }
         const name = decodeURIComponent(unregisterMatch[1])
         if (name !== state.city.name) {
             return json(res, 404, { detail: `city "${name}" not registered` })
@@ -266,6 +344,9 @@ const server = createServer(async (req, res) => {
     }
     const statusMatch = route.match(/^GET \/v0\/city\/([^/]+)\/status$/)
     if (statusMatch) {
+        if (!state.supervisorUp) {
+            return json(res, 503, { detail: 'mock-gc supervisor is down' })
+        }
         const lite = url.searchParams.get('lite') === 'true'
         return json(res, 200, {
             name: state.city.name,
@@ -283,6 +364,9 @@ const server = createServer(async (req, res) => {
     }
     const healthMatch = route.match(/^GET \/v0\/city\/([^/]+)\/health$/)
     if (healthMatch) {
+        if (!state.supervisorUp) {
+            return json(res, 503, { detail: 'mock-gc supervisor is down' })
+        }
         return json(res, 200, {
             status: 'ok',
             agent_count: state.city.agents.total,
@@ -290,6 +374,9 @@ const server = createServer(async (req, res) => {
         })
     }
     if (route === 'GET /v0/events') {
+        if (!state.supervisorUp) {
+            return json(res, 503, { detail: 'mock-gc supervisor is down' })
+        }
         // Cheap history tail. `since` is a Go duration like "1h" – we ignore it
         // and just return the last `limit` events (default 100).
         const limit = Number(url.searchParams.get('limit') ?? '100')
@@ -303,8 +390,40 @@ const server = createServer(async (req, res) => {
     json(res, 404, { detail: `mock-gc: ${route} not implemented` })
 })
 
-server.listen(PORT, '127.0.0.1', () => {
+/**
+ * Write a small `gc` shim to a temp dir. The shim maps CLI subcommands
+ * to the supervisor endpoints above so the console's `gcSupervisorStart`
+ * server function (which spawns `gc start` etc.) has a real binary to
+ * talk to during e2e tests. The wrapper script sets `GC_BIN` to this
+ * path; in production `GC_BIN` defaults to a real `gc` on PATH.
+ */
+async function writeGcShim(): Promise<string> {
+    const { writeFileSync, mkdirSync, chmodSync } = await import('node:fs')
+    const dir = `${process.env.TMPDIR ?? '/tmp'}/mock-gc-bin`
+    mkdirSync(dir, { recursive: true })
+    const binPath = `${dir}/gc`
+    const script = `#!/usr/bin/env bash
+set -euo pipefail
+PORT="\${MOCK_GC_PORT:-${PORT}}"
+case "\${1:-}" in
+  start)    curl -fsS -X POST "http://127.0.0.1:\${PORT}/v0/supervisor/start"     >/dev/null; echo "gc supervisor started"; exit 0 ;;
+  stop)     curl -fsS -X POST "http://127.0.0.1:\${PORT}/v0/supervisor/stop"      >/dev/null; echo "gc supervisor stopped"; exit 0 ;;
+  restart)  curl -fsS -X POST "http://127.0.0.1:\${PORT}/v0/supervisor/restart"   >/dev/null; echo "gc supervisor restarted"; exit 0 ;;
+  status)   curl -fsS "http://127.0.0.1:\${PORT}/health" || echo "down"; exit 0 ;;
+  version)  echo "${SUPERVISOR_VERSION}" ;;
+  *)        echo "mock-gc: unknown subcommand \$1" >&2; exit 2 ;;
+esac
+`
+    writeFileSync(binPath, script, { mode: 0o755 })
+    chmodSync(binPath, 0o755)
+    return binPath
+}
+
+server.listen(PORT, '127.0.0.1', async () => {
     console.log(`[mock-gc] listening on http://127.0.0.1:${PORT} (version=${SUPERVISOR_VERSION})`)
+    const shim = await writeGcShim()
+    console.log(`[mock-gc] gc shim written to ${shim}`)
+    console.log(`[mock-gc] set GC_BIN=${shim} to drive the daemon from the console`)
 })
 
 // Graceful shutdown so `bun run` doesn't leave zombies.
