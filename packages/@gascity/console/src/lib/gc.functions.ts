@@ -379,16 +379,42 @@ const REQUEST_POLL_MS = 750
  * would expect to see; the actual source is the supervisor's event log.
  */
 async function readSupervisorEvents(since?: string, limit = 200): Promise<{
-  events: Array<{ id: string; type: string; actor?: string; created_at?: string; payload?: unknown }>
+  events: Array<{ seq: string; type: string; actor?: string; subject?: string; ts?: string; created_at?: string; payload?: unknown }>
 }> {
   const res = await DefaultService.getV0Events(undefined, undefined, since, limit)
-  const ok = unwrap(res as Envelope<{ events?: Array<{ id?: unknown; type?: unknown; actor?: unknown; created_at?: unknown; payload?: unknown }> }>)
+  // Per `gastownhall/gascity`'s `SupervisorEventListOutput` Go struct,
+  // the response shape is `{ event_cursor, items, total }` — events
+  // live under `items`, not `events`. We accept either so a future
+  // rename doesn't silently empty the log buffer again.
+  const ok = unwrap(res as Envelope<{
+    items?: Array<{
+      seq?: unknown
+      type?: unknown
+      actor?: unknown
+      subject?: unknown
+      ts?: unknown
+      created_at?: unknown
+      payload?: unknown
+    }>
+    events?: Array<{
+      seq?: unknown
+      type?: unknown
+      actor?: unknown
+      subject?: unknown
+      ts?: unknown
+      created_at?: unknown
+      payload?: unknown
+    }>
+  }>)
   if (!ok) return { events: [] }
+  const raw = ok.items ?? ok.events ?? []
   return {
-    events: (ok.events ?? []).map((e) => ({
-      id: String(e.id ?? ''),
-      type: String(e.type ?? ''),
+    events: raw.map((e) => ({
+      seq: String(e.seq ?? ""),
+      type: String(e.type ?? ""),
       actor: e.actor as string | undefined,
+      subject: e.subject as string | undefined,
+      ts: e.ts as string | undefined,
       created_at: e.created_at as string | undefined,
       payload: e.payload,
     })),
@@ -405,14 +431,14 @@ async function awaitRequestResult(
   cursor: string | undefined,
   matchTypes: string[],
   timeoutMs = REQUEST_TIMEOUT_MS,
-): Promise<{ event: { id: string; type: string; payload?: unknown } | null; timedOut: boolean }> {
+): Promise<{ event: { seq: string; type: string; payload?: unknown } | null; timedOut: boolean }> {
   const deadline = Date.now() + timeoutMs
   while (Date.now() < deadline) {
     const { events } = await readSupervisorEvents(cursor, 100)
     for (const e of events) {
       const payload = (e.payload ?? {}) as { request_id?: string }
       if (requestId && payload.request_id === requestId && matchTypes.includes(e.type)) {
-        return { event: { id: e.id, type: e.type, payload: e.payload }, timedOut: false }
+        return { event: { seq: e.seq, type: e.type, payload: e.payload }, timedOut: false }
       }
     }
     if (events.length === 0) {
@@ -422,11 +448,25 @@ async function awaitRequestResult(
   return { event: null, timedOut: true }
 }
 
-function fmtEventForConsole(e: { type: string; actor?: string; created_at?: string; payload?: unknown }): string {
-  const ts = e.created_at ?? ''
+function fmtEventForConsole(e: {
+  type: string
+  actor?: string
+  subject?: string
+  ts?: string
+  created_at?: string
+  payload?: unknown
+}): string {
+  // Upstream `WireTaggedEvent` uses `ts` for the timestamp and
+  // `subject` for what was acted on (path, rig, etc.). Older fields
+  // `created_at` / `actor` are kept as fallbacks so older OpenAPI
+  // clients (or future renames) still produce readable output.
+  const ts = e.ts ?? e.created_at ?? ''
   const who = e.actor ? ` ${e.actor}` : ''
-  const payload = e.payload && typeof e.payload === 'object' ? ` ${JSON.stringify(e.payload)}` : ''
-  return `${ts} ${e.type}${who}${payload}`.trim()
+  const subj = e.subject ? ` ${e.subject}` : ''
+  const payload = e.payload && typeof e.payload === "object"
+    ? ` ${JSON.stringify(e.payload)}`
+    : ""
+  return `${ts} ${e.type}${who}${subj}${payload}`.trim()
 }
 
 async function startCityImpl(cityName: string): Promise<{
@@ -1167,11 +1207,25 @@ async function startSupervisorImpl(opts: { cwd?: string } = {}): Promise<{
   ok: boolean
   error?: string
 }> {
-  // `gc start` is idempotent — if the supervisor is already running it
-  // typically exits non-zero with a "already running" message. We
-  // surface that case as ok=true with a note so the operator's action
-  // console reflects the truth (no spurious error).
-  const result = await runGc(['start'], { timeoutMs: 30_000, cwd: opts.cwd })
+  // We deliberately use `gc supervisor start` rather than `gc start`.
+  // The upstream `gc` Go CLI distinguishes these:
+  //
+  //   `gc start`               — registers a city with the supervisor
+  //                              AND starts the supervisor if needed.
+  //                              Requires a bootstrapped city (i.e.
+  //                              city.toml present in the target dir).
+  //   `gc supervisor start`    — starts ONLY the supervisor, with no
+  //                              city registered. Does not require
+  //                              a bootstrapped city.
+  //
+  // The supervisor popover in our console is the operator's control
+  // for "is the supervisor up?" — not "is city X running?". An
+  // operator who hasn't scaffolded a city yet still needs to be
+  // able to bring the supervisor up (so the API comes online and
+  // other tooling can discover it). Using `gc supervisor start`
+  // avoids the confusing "not in a city directory" error that `gc
+  // start` produces when run from a non-city cwd.
+  const result = await runGc(['supervisor', 'start'], { timeoutMs: 30_000, cwd: opts.cwd })
   if (result.ok) {
     return {
       output: 'gc supervisor started',
@@ -1182,19 +1236,6 @@ async function startSupervisorImpl(opts: { cwd?: string } = {}): Promise<{
     return {
       output: 'gc supervisor already running',
       ok: true,
-    }
-  }
-  // Detect "not in a city directory" so the UI can prompt the operator
-  // to init instead of showing an opaque CLI error. We surface this as
-  // a structured `error` code rather than free-form text so the client
-  // can branch on it.
-  if (/not in a city directory/i.test(result.stderr) || /not in a city directory/i.test(result.stdout)) {
-    return {
-      output:
-        'gc start: not in a city directory. Run `gc init <path>` first ' +
-        '(use the `init` button in the supervisor panel).',
-      ok: false,
-      error: 'not-in-city-dir',
     }
   }
   // Special-case ENOENT (binary not on PATH). This is the most common
@@ -1211,7 +1252,7 @@ async function startSupervisorImpl(opts: { cwd?: string } = {}): Promise<{
     }
   }
   return {
-    output: `gc start failed (exit=${result.code}): ${(result.stderr || result.stdout).trim().slice(0, 500)}`,
+    output: `gc supervisor start failed (exit=${result.code}): ${(result.stderr || result.stdout).trim().slice(0, 500)}`,
     ok: false,
     error: (result.stderr || result.stdout).trim().slice(0, 500),
   }
@@ -1222,7 +1263,7 @@ async function stopSupervisorImpl(opts: { cwd?: string } = {}): Promise<{
   ok: boolean
   error?: string
 }> {
-  const result = await runGc(['stop'], { timeoutMs: 30_000, cwd: opts.cwd })
+  const result = await runGc(['supervisor', 'stop'], { timeoutMs: 30_000, cwd: opts.cwd })
   if (result.ok) {
     return {
       output: 'gc supervisor stopped',
@@ -1236,7 +1277,7 @@ async function stopSupervisorImpl(opts: { cwd?: string } = {}): Promise<{
     }
   }
   return {
-    output: `gc stop failed (exit=${result.code}): ${(result.stderr || result.stdout).trim().slice(0, 500)}`,
+    output: `gc supervisor stop failed (exit=${result.code}): ${(result.stderr || result.stdout).trim().slice(0, 500)}`,
     ok: false,
     error: (result.stderr || result.stdout).trim().slice(0, 500),
   }
@@ -1344,7 +1385,7 @@ export const gcSupervisorStart = createServerFn({ method: 'POST' })
       return await startSupervisorImpl({ cwd: data?.cwd })
     } catch (error) {
       return {
-        output: 'gc start threw unexpectedly',
+        output: 'gc supervisor start threw unexpectedly',
         ok: false,
         error: error instanceof Error ? error.message : String(error),
       }
@@ -1362,7 +1403,7 @@ export const gcSupervisorStop = createServerFn({ method: 'POST' })
       return await stopSupervisorImpl({ cwd: data?.cwd })
     } catch (error) {
       return {
-        output: 'gc stop threw unexpectedly',
+        output: 'gc supervisor stop threw unexpectedly',
         ok: false,
         error: error instanceof Error ? error.message : String(error),
       }
