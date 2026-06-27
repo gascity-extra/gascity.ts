@@ -1,4 +1,4 @@
-import { Page, Locator } from '@playwright/test';
+import { Page, Locator, expect } from '@playwright/test';
 
 /**
  * Resolve the test runner's base URL for absolute navigation. Falls back to
@@ -50,10 +50,33 @@ export async function isGcBackendReachable(timeoutMs = 1500): Promise<boolean> {
  *
  * Uses a small fixed delay as the primary mechanism — TanStack's hydration
  * marker is only emitted in dev. 1.5s is comfortably above the worst-case
- * cold-hydration we've observed on this dev container.
+ * cold-hydration we've observed on this dev container for the regular UI
+ * smoke tests. Specs that drive the supervisor panel need a longer
+ * wait because the supervisor server functions cold-load too — see
+ * `waitForSupervisorPanel` below.
  */
 export async function waitForHydration(page: Page): Promise<void> {
   await page.waitForTimeout(1500);
+}
+
+/**
+ * Extended hydration wait used by supervisor-panel specs. Waits for the
+ * popover's `useQuery` calls (health, city-status, logs) to round-trip
+ * through the server functions. Specifically waits for the supervisor
+ * health query to resolve — the toggle version segment flips from "—"
+ * to "1.0.0" once `gcHealth` returns.
+ *
+ * On a cold Vite dev server the supervisor server functions cold-load
+ * along with the page; their first round-trip can take 5-10s end-to-end.
+ */
+export async function waitForSupervisorPanel(page: Page): Promise<void> {
+  await expect
+    .poll(
+      async () =>
+        page.locator('[title="supervisor (v)"]').textContent(),
+      { timeout: 30_000, intervals: [500, 1000, 2000] },
+    )
+    .toContain("1.0.0");
 }
 
 /**

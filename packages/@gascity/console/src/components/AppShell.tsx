@@ -7,10 +7,13 @@ import { Command } from "cmdk";
 import clsx from "clsx";
 
 import {
+  gcCityInit,
+  gcCityProbe,
   gcCityStart,
   gcCityStatus,
   gcCityStop,
   gcHealth,
+  gcSupervisorDiscover,
   gcSupervisorLogs,
   gcSupervisorRestart,
   gcSupervisorStart,
@@ -103,6 +106,63 @@ export function AppShell({ children }: { children: ReactNode }) {
 
 type Phase = "down" | "up-stopped" | "up-running" | "starting" | "stopping";
 
+// localStorage key for the operator's chosen city directory. Persisted
+// across reloads so they don't have to re-type it every time they open
+// the supervisor panel. Stored as a plain string; absent / empty means
+// "use server default (GC_CITY_DIR or console cwd)".
+const CITY_DIR_STORAGE_KEY = "gc.console.cityDir";
+
+// localStorage key for the operator's chosen supervisor API URL. An
+// empty value means "let the server decide" — the server will then
+// honour `GC_API_BASE_URL` (console-side convention), then read
+// `supervisor.toml` exactly like the upstream `gc` Go CLI does in
+// `supervisorAPIBaseURL()`, and finally fall back to the upstream
+// default port 9443. We deliberately do not honour a
+// `GC_SUPERVISOR_URL` env var — the upstream CLI does not read one,
+// and inventing one would mislead operators. Storing the URL in
+// localStorage (not on the server) means each operator's browser
+// remembers their own override without leaking into the shared server
+// config.
+const SUPERVISOR_URL_STORAGE_KEY = "gc.console.supervisorUrl";
+
+function readPersistedCityDir(): string {
+  if (typeof window === "undefined") return "";
+  try {
+    return window.localStorage.getItem(CITY_DIR_STORAGE_KEY) ?? "";
+  } catch {
+    return "";
+  }
+}
+
+function writePersistedCityDir(value: string): void {
+  if (typeof window === "undefined") return;
+  try {
+    if (value) window.localStorage.setItem(CITY_DIR_STORAGE_KEY, value);
+    else window.localStorage.removeItem(CITY_DIR_STORAGE_KEY);
+  } catch {
+    /* localStorage may be unavailable (private mode, etc.) — non-fatal */
+  }
+}
+
+function readPersistedSupervisorUrl(): string {
+  if (typeof window === "undefined") return "";
+  try {
+    return window.localStorage.getItem(SUPERVISOR_URL_STORAGE_KEY) ?? "";
+  } catch {
+    return "";
+  }
+}
+
+function writePersistedSupervisorUrl(value: string): void {
+  if (typeof window === "undefined") return;
+  try {
+    if (value) window.localStorage.setItem(SUPERVISOR_URL_STORAGE_KEY, value);
+    else window.localStorage.removeItem(SUPERVISOR_URL_STORAGE_KEY);
+  } catch {
+    /* localStorage may be unavailable — non-fatal */
+  }
+}
+
 function Header({
   onPalette,
   supervisorOpen,
@@ -116,14 +176,23 @@ function Header({
 }) {
   const health = useServerFn(gcHealth);
   const version = useServerFn(gcVersion);
+  // Read the persisted supervisor URL once at mount. The Header lives
+  // outside the popover so it can't share React state with it; instead
+  // both components read the same localStorage key. The TanStack Query
+  // cache key includes the URL so changing it from the popover busts
+  // the cache and the Header polls the new endpoint.
+  const initialApiUrl = useRef<string>(readPersistedSupervisorUrl());
   const { data } = useQuery({
-    queryKey: ["gc", "health"],
-    queryFn: () => health() as Promise<{
-      reachable: boolean
-      baseUrl: string
-      version: string
-      error?: string
-    }>,
+    queryKey: ["gc", "health", initialApiUrl.current],
+    queryFn: () =>
+      health({
+        data: { apiUrl: initialApiUrl.current || undefined },
+      }) as Promise<{
+        reachable: boolean
+        baseUrl: string
+        version: string
+        error?: string
+      }>,
     refetchInterval: 5000,
   });
   const { data: v } = useQuery({
@@ -224,6 +293,9 @@ function SupervisorPopover({
   const supervisorStop = useServerFn(gcSupervisorStop);
   const restart = useServerFn(gcSupervisorRestart);
   const status = useServerFn(gcCityStatus);
+  const cityProbe = useServerFn(gcCityProbe);
+  const cityInit = useServerFn(gcCityInit);
+  const supervisorDiscover = useServerFn(gcSupervisorDiscover);
   const qc = useQueryClient();
 
   const [transition, setTransition] = useState<null | "starting" | "stopping">(null);
@@ -231,6 +303,22 @@ function SupervisorPopover({
   const [copiedConsole, setCopiedConsole] = useState(false);
   const [copiedLog, setCopiedLog] = useState(false);
   const transitionStart = useRef<number>(0);
+  // City directory the supervisor should run from. Persisted to
+  // localStorage so the operator only sets it once per machine. Empty
+  // string falls back to the server-side GC_CITY_DIR (or console cwd).
+  const [cityDir, setCityDir] = useState<string>(() => readPersistedCityDir());
+  const [cityDirDraft, setCityDirDraft] = useState<string>(() => readPersistedCityDir());
+  // Supervisor API URL. Empty = let the server pick (env / toml /
+  // default). Persisted across reloads so the operator only sets it
+  // once per machine. Survives even when the supervisor is offline —
+  // we use the persisted value when issuing start/stop/restart even
+  // though we can't reach it to probe.
+  const [supervisorUrl, setSupervisorUrl] = useState<string>(() =>
+    readPersistedSupervisorUrl(),
+  );
+  const [supervisorUrlDraft, setSupervisorUrlDraft] = useState<string>(() =>
+    readPersistedSupervisorUrl(),
+  );
 
   // Copy a string to the clipboard with a brief "copied!" confirmation.
   // Uses the navigator Clipboard API where available; falls back to a
@@ -285,8 +373,9 @@ function SupervisorPopover({
   });
 
   const { data: city } = useQuery({
-    queryKey: ["gc", "city-status"],
-    queryFn: () => status({ data: { lite: true } }),
+    queryKey: ["gc", "city-status", supervisorUrl],
+    queryFn: () =>
+      status({ data: { lite: true, apiUrl: supervisorUrl || undefined } }),
     refetchInterval: 5000,
     // Always poll — when the supervisor is offline the server function
     // degrades to a silent empty state, so the cost is negligible.
@@ -295,6 +384,99 @@ function SupervisorPopover({
     // load.
     enabled: true,
   });
+
+  // Discover the supervisor URL on demand. Returns the resolved URL
+  // (override → env → toml → default) plus a reachability flag and
+  // the URL we read from supervisor.toml, if any. We poll this so the
+  // operator sees a "resolved from supervisor.toml" hint the moment
+  // the file appears on disk (e.g. after they install gc).
+  const {
+    data: supervisorInfo,
+    error: supervisorInfoError,
+    isFetching: supervisorInfoFetching,
+  } = useQuery({
+    queryKey: ["gc", "supervisor-discover", supervisorUrl],
+    queryFn: () =>
+      supervisorDiscover({ data: { apiUrl: supervisorUrl || undefined } }),
+    refetchInterval: 8000,
+  });
+
+  // Probe whether the chosen city directory is initialized (contains
+  // `city.toml` or `.gc/`). Polled lightly so the operator can flip
+  // the directory and immediately see whether init is needed. The
+  // server resolves the path against its allow-list, so a bogus value
+  // here just yields an error string rather than an arbitrary FS walk.
+  const {
+    data: probe,
+    error: probeError,
+    isFetching: probeFetching,
+  } = useQuery({
+    queryKey: ["gc", "city-probe", cityDir],
+    queryFn: () => cityProbe({ data: { cwd: cityDir || undefined } }),
+    refetchInterval: 6000,
+  });
+
+  // Whenever the last start attempt returned "not in a city directory",
+  // kick the probe so the LED / button state refreshes the moment the
+  // operator has had a chance to either change the directory or click
+  // `init`. We key on the most recent console line so the effect runs
+  // once per failed attempt, not on every keystroke.
+  const lastStartFailedNotInit = console_.includes("not in a city directory");
+  useEffect(() => {
+    if (lastStartFailedNotInit) {
+      qc.invalidateQueries({ queryKey: ["gc", "city-probe"] });
+    }
+  }, [lastStartFailedNotInit, qc]);
+
+  const initMut = useMutation({
+    mutationFn: () =>
+      cityInit({ data: { path: cityDirDraft.trim() || cityDir.trim() } }),
+    onMutate: () => {
+      appendConsole(
+        "$ gc init",
+        `requesting in "${cityDirDraft.trim() || cityDir.trim() || "<server-default>"}"…`,
+      );
+    },
+    onSuccess: (r) => {
+      appendConsole("$ gc init", r.output);
+      if (!r.ok) {
+        appendConsole("! gc init", `error: ${r.error ?? "unknown"}`);
+      }
+      // Refresh probe + city-status + health so the LED flips from
+      // amber (not initialized) to green once `init` actually writes
+      // the city.toml.
+      qc.invalidateQueries({ queryKey: ["gc", "city-probe"] });
+      qc.invalidateQueries({ queryKey: ["gc", "health"] });
+    },
+    onError: (e: unknown) => {
+      appendConsole("! gc init", e instanceof Error ? e.message : String(e));
+    },
+  });
+
+  function commitCityDir(next: string) {
+    const trimmed = next.trim();
+    setCityDir(trimmed);
+    writePersistedCityDir(trimmed);
+    setCityDirDraft(trimmed);
+    // Force the probe (and everything else that depends on cwd) to
+    // refresh against the new directory immediately.
+    qc.invalidateQueries({ queryKey: ["gc", "city-probe"] });
+    qc.invalidateQueries({ queryKey: ["gc", "health"] });
+  }
+
+  function commitSupervisorUrl(next: string) {
+    const trimmed = next.trim();
+    setSupervisorUrl(trimmed);
+    writePersistedSupervisorUrl(trimmed);
+    setSupervisorUrlDraft(trimmed);
+    // The Header health badge and the popover city-status both key on
+    // the URL, so invalidating them flips the LED the moment the
+    // operator commits a new value.
+    qc.invalidateQueries({ queryKey: ["gc", "health"] });
+    qc.invalidateQueries({ queryKey: ["gc", "city-status"] });
+    qc.invalidateQueries({ queryKey: ["gc", "supervisor-discover"] });
+    qc.invalidateQueries({ queryKey: ["gc", "supervisor-logs"] });
+  }
 
   // Clear the "starting" transition once the city actually comes up;
   // clear the "stopping" transition once the city disappears. This is
@@ -343,6 +525,86 @@ function SupervisorPopover({
     );
   }
 
+  // Supervisor URL badge helpers. We split label / class / title so
+  // the same logic drives both the visible chip and the tooltip the
+  // operator hovers over for detail. `override` lets us distinguish
+  // "user-typed URL" from "server picked the URL" — only the latter
+  // shows source hints like "env" or "supervisor.toml".
+  function supervisorUrlBadgeLabel(
+    info:
+      | {
+          url: string
+          source: "override" | "env" | "toml" | "default"
+          fromToml: string | null
+          reachable: boolean
+          apiDisabled?: boolean
+        }
+      | undefined,
+    err: unknown,
+    fetching: boolean,
+    override: string,
+  ): string {
+    if (err) return "probe error"
+    if (fetching && !info) return "checking…"
+    if (!info) return "—"
+    if (info.apiDisabled) return "api disabled"
+    if (info.reachable) return "reachable"
+    if (override) return "url set · offline"
+    if (info.source === "toml") return "auto · offline"
+    if (info.source === "env") return "env · offline"
+    if (info.source === "default") return "default · offline"
+    return "offline"
+  }
+
+  function supervisorUrlBadgeClass(
+    info:
+      | {
+          reachable: boolean
+          apiDisabled?: boolean
+        }
+      | undefined,
+    err: unknown,
+    fetching: boolean,
+  ): string {
+    if (err) return "border border-red-500/60 text-red-300"
+    if (fetching && !info) return "border border-border text-muted-foreground"
+    if (!info) return "border border-border text-muted-foreground"
+    if (info.apiDisabled)
+      return "border border-violet-500/60 text-violet-300"
+    if (info.reachable) return "border border-emerald-500/60 text-emerald-300"
+    return "border border-amber-500/60 text-amber-300"
+  }
+
+  function supervisorUrlBadgeTitle(
+    info:
+      | {
+          url: string
+          source: "override" | "env" | "toml" | "default"
+          fromToml: string | null
+          reachable: boolean
+          apiDisabled?: boolean
+        }
+      | undefined,
+    err: unknown,
+    override: string,
+  ): string {
+    if (err) {
+      return `discover error: ${err instanceof Error ? err.message : String(err)}`
+    }
+    if (!info) return "checking supervisor URL…"
+    if (info.apiDisabled)
+      return "GC_NO_API is set on the console server — supervisor API calls are disabled. Unset it (or set to 0) to enable the API."
+    const sourceLine =
+      info.source === "override"
+        ? "source: operator override (UI input)"
+        : info.source === "env"
+          ? "source: GC_API_BASE_URL env (console-side convention — not read by upstream `gc`)"
+          : info.source === "toml"
+            ? `source: supervisor.toml (${info.fromToml ?? info.url})`
+            : "source: built-in default (http://127.0.0.1:9443, matches upstream `gc` PortOrDefault)"
+    return `${sourceLine}\nresolved: ${info.url}\nreachable: ${info.reachable ? "yes" : "no"}${override ? `\noverride: ${override}` : ""}`
+  }
+
   // Capture the phase at click time so the mutation's mutationFn and
 // onSuccess/onError callbacks don't drift if React re-renders between
 // the click and the network round-trip (StrictMode intentionally
@@ -365,7 +627,8 @@ function captureStopIntent(): "supervisor-stop" | "city-stop" | null {
 const startMut = useMutation({
     mutationFn: () => {
       const intent = startIntent.current
-      if (intent === "supervisor-start") return supervisorStart()
+      const cwdArg = cityDir ? { cwd: cityDir } : undefined
+      if (intent === "supervisor-start") return supervisorStart({ data: cwdArg })
       if (intent === "city-start") return cityStart({ data: {} })
       throw new Error(`no start intent captured (phase=${phase})`)
     },
@@ -374,14 +637,14 @@ const startMut = useMutation({
       transitionStart.current = Date.now()
       const label =
         startIntent.current === "supervisor-start"
-          ? "$ gc supervisor start"
+          ? `$ gc supervisor start${cityDir ? `  (cwd=${cityDir})` : ""}`
           : "$ gc city start"
       appendConsole(label, "requesting…")
     },
     onSuccess: (r) => {
       const label =
         startIntent.current === "supervisor-start"
-          ? "$ gc supervisor start"
+          ? `$ gc supervisor start${cityDir ? `  (cwd=${cityDir})` : ""}`
           : "$ gc city start"
       appendConsole(label, r.output)
       if (!r.ok) {
@@ -389,6 +652,7 @@ const startMut = useMutation({
       }
       qc.invalidateQueries({ queryKey: ["gc", "health"] })
       qc.invalidateQueries({ queryKey: ["gc", "city-status"] })
+      qc.invalidateQueries({ queryKey: ["gc", "city-probe"] })
     },
     onError: (e: unknown) => {
       appendConsole("! start", e instanceof Error ? e.message : String(e))
@@ -399,7 +663,8 @@ const startMut = useMutation({
 const stopMut = useMutation({
     mutationFn: () => {
       const intent = stopIntent.current
-      if (intent === "supervisor-stop") return supervisorStop()
+      const cwdArg = cityDir ? { cwd: cityDir } : undefined
+      if (intent === "supervisor-stop") return supervisorStop({ data: cwdArg })
       if (intent === "city-stop") return cityStop({ data: {} })
       throw new Error(`no stop intent captured (phase=${phase})`)
     },
@@ -430,17 +695,25 @@ const stopMut = useMutation({
     },
   });
   const restartMut = useMutation({
-    mutationFn: () => restart(),
+    mutationFn: () =>
+      restart({ data: cityDir ? { cwd: cityDir } : undefined }),
     onMutate: () => {
       setTransition("starting");
       transitionStart.current = Date.now();
-      appendConsole("$ gc supervisor restart", "stopping + starting…");
+      appendConsole(
+        `$ gc supervisor restart${cityDir ? `  (cwd=${cityDir})` : ""}`,
+        "stopping + starting…",
+      );
     },
     onSuccess: (r) => {
-      appendConsole("$ gc supervisor restart", r.output);
+      appendConsole(
+        `$ gc supervisor restart${cityDir ? `  (cwd=${cityDir})` : ""}`,
+        r.output,
+      );
       if (!r.ok) appendConsole("! gc supervisor restart", `error: ${r.error ?? "unknown"}`);
       qc.invalidateQueries({ queryKey: ["gc", "health"] });
       qc.invalidateQueries({ queryKey: ["gc", "city-status"] });
+      qc.invalidateQueries({ queryKey: ["gc", "city-probe"] });
     },
     onError: (e: unknown) => {
       appendConsole("! gc supervisor restart", e instanceof Error ? e.message : String(e));
@@ -478,10 +751,18 @@ const stopActionKind =
 const restartActionKind =
   phase === "up-running" || phase === "up-stopped" ? "supervisor-restart" : null;
 
-const canStart = startActionKind !== null;
+// `start` only makes sense if the resolved city directory is already
+// initialized (city.toml or .gc/ present). Until then we surface an
+// `init` button instead and disable start so the operator doesn't keep
+// hitting the same opaque "not in a city directory" error.
+const cityInitialized = probe?.initialized === true;
+const initRequired = probe != null && !cityInitialized && !probeError;
+const canStart = startActionKind !== null && cityInitialized;
 const canStop = stopActionKind !== null;
 const canRestart = restartActionKind !== null;
-const busy = !!transition;
+const busy = !!transition || initMut.isPending;
+const effectiveCityDir =
+  probe?.cwd ?? (cityDir || "<server-default>");
 
 return (
     <>
@@ -506,14 +787,38 @@ return (
             <button
               onClick={() => { captureStartIntent(); startMut.mutate() }}
               disabled={!canStart || busy}
-              aria-label={startActionKind === "supervisor-start" ? "start supervisor" : "start city"}
-              title={startActionKind === "supervisor-start" ? "start the gc supervisor daemon" : "start the city"}
+              aria-label={
+                initRequired
+                  ? "init city first"
+                  : startActionKind === "supervisor-start"
+                    ? "start supervisor"
+                    : "start city"
+              }
+              title={
+                initRequired
+                  ? "city directory is not initialized — click init first"
+                  : startActionKind === "supervisor-start"
+                    ? "start the gc supervisor daemon"
+                    : "start the city"
+              }
               data-testid="supervisor-start"
-              data-action-kind={startActionKind ?? "unavailable"}
+              data-action-kind={initRequired ? "blocked-not-initialized" : (startActionKind ?? "unavailable")}
               className="rounded border border-border px-2 py-0.5 font-mono text-[11px] hover:bg-muted disabled:opacity-40"
             >
               start
             </button>
+            {initRequired && (
+              <button
+                onClick={() => initMut.mutate()}
+                disabled={busy}
+                aria-label="initialize city"
+                title={`run 'gc init' in ${effectiveCityDir}`}
+                data-testid="city-init"
+                className="rounded border border-amber-500/60 px-2 py-0.5 font-mono text-[11px] text-amber-300 hover:bg-amber-500/10 disabled:opacity-40"
+              >
+                init
+              </button>
+            )}
             <button
               onClick={() => restartMut.mutate()}
               disabled={!canRestart || busy}
@@ -537,6 +842,109 @@ return (
               stop
             </button>
           </div>
+        </div>
+
+        {/* City directory picker. The supervisor runs `gc start` from
+            this directory, so it must contain a city.toml (or .gc/).
+            The badge on the right shows live probe state so the
+            operator can tell at a glance whether init is needed. */}
+        <div className="flex items-center gap-2 border-b border-border bg-background px-4 py-1.5 font-mono text-[11px]">
+          <span className="text-[10px] uppercase tracking-wider text-muted-foreground">
+            city dir
+          </span>
+          <input
+            value={cityDirDraft}
+            onChange={(e) => setCityDirDraft(e.target.value)}
+            onBlur={() => commitCityDir(cityDirDraft)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                commitCityDir(cityDirDraft);
+              }
+            }}
+            placeholder="(server default)"
+            spellCheck={false}
+            data-testid="city-dir-input"
+            className="min-w-0 flex-1 rounded border border-border bg-card px-2 py-0.5 text-foreground outline-none focus:border-foreground/40"
+          />
+          <span
+            data-testid="city-probe-status"
+            title={
+              probeError
+                ? `probe error: ${probeError instanceof Error ? probeError.message : String(probeError)}`
+                : probe?.initialized
+                  ? "initialized (city.toml or .gc/ present)"
+                  : "not initialized"
+            }
+            className={clsx(
+              "shrink-0 rounded px-1.5 py-0.5 text-[10px]",
+              probeError
+                ? "border border-red-500/60 text-red-300"
+                : probe?.initialized
+                  ? "border border-emerald-500/60 text-emerald-300"
+                  : probeFetching
+                    ? "border border-border text-muted-foreground"
+                    : "border border-amber-500/60 text-amber-300",
+            )}
+          >
+            {probeError
+              ? "probe error"
+              : probe?.initialized
+                ? "initialized"
+                : probeFetching
+                  ? "checking…"
+                  : "not initialized"}
+          </span>
+        </div>
+
+        {/* Supervisor API URL picker. Mirrors `gc dashboard --api`:
+            when non-empty, the server uses this URL for the OpenAPI
+            client; when empty, the server resolves it from
+            GC_API_BASE_URL → supervisor.toml → upstream default
+            port 9443. The badge shows which source actually won, and
+            whether the URL is reachable. */}
+        <div className="flex items-center gap-2 border-b border-border bg-background px-4 py-1.5 font-mono text-[11px]">
+          <span className="text-[10px] uppercase tracking-wider text-muted-foreground">
+            supervisor url
+          </span>
+          <input
+            value={supervisorUrlDraft}
+            onChange={(e) => setSupervisorUrlDraft(e.target.value)}
+            onBlur={() => commitSupervisorUrl(supervisorUrlDraft)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                commitSupervisorUrl(supervisorUrlDraft);
+              }
+            }}
+            placeholder="(auto: GC_API_BASE_URL / supervisor.toml / default 9443)"
+            spellCheck={false}
+            data-testid="supervisor-url-input"
+            className="min-w-0 flex-1 rounded border border-border bg-card px-2 py-0.5 text-foreground outline-none focus:border-foreground/40"
+          />
+          <span
+            data-testid="supervisor-url-status"
+            title={supervisorUrlBadgeTitle(
+              supervisorInfo,
+              supervisorInfoError,
+              supervisorUrl,
+            )}
+            className={clsx(
+              "shrink-0 rounded px-1.5 py-0.5 text-[10px]",
+              supervisorUrlBadgeClass(
+                supervisorInfo,
+                supervisorInfoError,
+                supervisorInfoFetching,
+              ),
+            )}
+          >
+            {supervisorUrlBadgeLabel(
+              supervisorInfo,
+              supervisorInfoError,
+              supervisorInfoFetching,
+              supervisorUrl,
+            )}
+          </span>
         </div>
 
         <div className="grid grid-cols-4 gap-px bg-border font-mono text-[11px]">

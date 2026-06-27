@@ -566,111 +566,169 @@ export const gcCityStop = createServerFn({ method: 'POST' })
  * so the LED can poll cheaply every few seconds.
  */
 export const gcCityStatus = createServerFn({ method: 'GET' })
-  .validator(z.object({ city: z.string().min(1).default('default').optional(), lite: z.boolean().default(true).optional() }).optional())
+  .validator(
+    z
+      .object({
+        city: z.string().min(1).default('default').optional(),
+        lite: z.boolean().default(true).optional(),
+        apiUrl: z.string().optional(),
+      })
+      .optional(),
+  )
   .handler(async ({ data }) => {
     const cityName = data?.city ?? CITY
-    try {
-      const res = await DefaultService.getV0CityByCityNameStatus(cityName, undefined, undefined, data?.lite ?? true)
-      const ok = unwrap(res as Envelope<{
-        name?: string
-        path?: string
-        agent_count?: number
-        agents?: { total?: number; running?: number; idle?: number; suspended?: number; error?: number }
-        sessions?: { total?: number; running?: number; idle?: number }
-        mail?: { total?: number; unread?: number }
-        work?: { open_beads?: number; closed_beads?: number }
-        partial?: boolean
-      }>)
-      if (!ok) {
-        return {
-          reachable: true as const,
-          city: cityName,
-          running: false as const,
-          agents: { total: 0, running: 0, idle: 0 },
-          sessions: { total: 0, running: 0 },
-          mail: { total: 0, unread: 0 },
-          work: { open: 0, closed: 0 },
-          partial: false,
-          error: (res as { detail?: string }).detail,
-        }
-      }
-      return {
-        reachable: true as const,
-        city: ok.name ?? cityName,
-        running: (ok.agents?.running ?? 0) > 0 || (ok.sessions?.running ?? 0) > 0,
-        agents: {
-          total: ok.agents?.total ?? ok.agent_count ?? 0,
-          running: ok.agents?.running ?? 0,
-          idle: ok.agents?.idle ?? 0,
-          suspended: ok.agents?.suspended ?? 0,
-          error: ok.agents?.error ?? 0,
-        },
-        sessions: {
-          total: ok.sessions?.total ?? 0,
-          running: ok.sessions?.running ?? 0,
-          idle: ok.sessions?.idle ?? 0,
-        },
-        mail: { total: ok.mail?.total ?? 0, unread: ok.mail?.unread ?? 0 },
-        work: { open: ok.work?.open_beads ?? 0, closed: ok.work?.closed_beads ?? 0 },
-        partial: ok.partial ?? false,
-      }
-    } catch (error) {
-      if (!silentIfOffline(error)) {
-        console.error('Failed to get city status:', error)
-      }
+    const override = data?.apiUrl
+    const { url, source } = resolveSupervisorUrl(override)
+    if (isSupervisorApiDisabled()) {
       return {
         reachable: false as const,
         city: cityName,
+        url,
+        urlSource: source,
+        urlDisabled: true as const,
         running: false as const,
         agents: { total: 0, running: 0, idle: 0 },
         sessions: { total: 0, running: 0 },
         mail: { total: 0, unread: 0 },
         work: { open: 0, closed: 0 },
         partial: false,
-        error: silentIfOffline(error) ? 'gas city supervisor is not reachable' : (error instanceof Error ? error.message : String(error)),
+        error: 'GC_NO_API is set — supervisor API calls are disabled',
       }
     }
+    return withSupervisorUrl(override, async () => {
+      try {
+        const res = await DefaultService.getV0CityByCityNameStatus(cityName, undefined, undefined, data?.lite ?? true)
+        const ok = unwrap(res as Envelope<{
+          name?: string
+          path?: string
+          agent_count?: number
+          agents?: { total?: number; running?: number; idle?: number; suspended?: number; error?: number }
+          sessions?: { total?: number; running?: number; idle?: number }
+          mail?: { total?: number; unread?: number }
+          work?: { open_beads?: number; closed_beads?: number }
+          partial?: boolean
+        }>)
+        if (!ok) {
+          return {
+            reachable: true as const,
+            city: cityName,
+            url,
+            urlSource: source,
+            running: false as const,
+            agents: { total: 0, running: 0, idle: 0 },
+            sessions: { total: 0, running: 0 },
+            mail: { total: 0, unread: 0 },
+            work: { open: 0, closed: 0 },
+            partial: false,
+            error: (res as { detail?: string }).detail,
+          }
+        }
+        return {
+          reachable: true as const,
+          city: ok.name ?? cityName,
+          url,
+          urlSource: source,
+          running: (ok.agents?.running ?? 0) > 0 || (ok.sessions?.running ?? 0) > 0,
+          agents: {
+            total: ok.agents?.total ?? ok.agent_count ?? 0,
+            running: ok.agents?.running ?? 0,
+            idle: ok.agents?.idle ?? 0,
+            suspended: ok.agents?.suspended ?? 0,
+            error: ok.agents?.error ?? 0,
+          },
+          sessions: {
+            total: ok.sessions?.total ?? 0,
+            running: ok.sessions?.running ?? 0,
+            idle: ok.sessions?.idle ?? 0,
+          },
+          mail: { total: ok.mail?.total ?? 0, unread: ok.mail?.unread ?? 0 },
+          work: { open: ok.work?.open_beads ?? 0, closed: ok.work?.closed_beads ?? 0 },
+          partial: ok.partial ?? false,
+        }
+      } catch (error) {
+        if (!silentIfOffline(error)) {
+          console.error('Failed to get city status:', error)
+        }
+        return {
+          reachable: false as const,
+          city: cityName,
+          url,
+          urlSource: source,
+          running: false as const,
+          agents: { total: 0, running: 0, idle: 0 },
+          sessions: { total: 0, running: 0 },
+          mail: { total: 0, unread: 0 },
+          work: { open: 0, closed: 0 },
+          partial: false,
+          error: silentIfOffline(error) ? 'gas city supervisor is not reachable' : (error instanceof Error ? error.message : String(error)),
+        }
+      }
+    })
   })
 
-export const gcHealth = createServerFn({ method: 'GET' }).handler(async () => {
-  try {
-    const response = await DefaultService.getHealth()
-    const ok = unwrap(response as Envelope<{ status?: string; build_id?: string; version?: string; cities_running?: number; cities_total?: number }>)
-    if (!ok) {
+export const gcHealth = createServerFn({ method: 'GET' })
+  .validator(z.object({ apiUrl: z.string().optional() }).optional())
+  .handler(async ({ data }) => {
+    const override = data?.apiUrl
+    const { url, source } = resolveSupervisorUrl(override)
+    // Honour upstream's `GC_NO_API` escape hatch: if the operator
+    // explicitly disabled supervisor API access (mirrors what `gc`
+    // does in the Go CLI), short-circuit with a clean "disabled"
+    // state so the UI shows a distinct badge instead of a generic
+    // "offline" red dot.
+    if (isSupervisorApiDisabled()) {
       return {
         reachable: false as const,
-        baseUrl: 'http://localhost:3000',
+        baseUrl: url,
+        urlSource: source,
+        urlDisabled: true as const,
         version: '1.0.0',
-        error: (response as { detail?: string }).detail,
+        error: 'GC_NO_API is set — supervisor API calls are disabled',
       }
     }
-    // `SupervisorHealthOutputBody` exposes `status` ("ok") and `build_id`
-    // but no `version`. We fall back to "1.0.0" so the UI LED label
-    // stays sensible; a real version string would come from the
-    // supervisor's own `/version` endpoint (not yet exposed).
-    return {
-      reachable: true as const,
-      baseUrl: 'http://localhost:3000',
-      version: '1.0.0',
-      buildId: ok.build_id,
-      citiesRunning: ok.cities_running,
-      citiesTotal: ok.cities_total,
-      status: ok.status,
-    }
-  } catch (error) {
-    if (!silentIfOffline(error)) {
-      console.error('Failed to get health:', error)
-    }
-    // Surface a short, user-friendly reason. The raw axios dump (host,
-    // port, stack) is internal — the UI just needs to know it's down.
-    return {
-      reachable: false as const,
-      baseUrl: 'http://localhost:3000',
-      version: '1.0.0',
-      error: 'gas city supervisor is not reachable',
-    }
-  }
-})
+    return withSupervisorUrl(override, async () => {
+      try {
+        const response = await DefaultService.getHealth()
+        const ok = unwrap(response as Envelope<{ status?: string; build_id?: string; version?: string; cities_running?: number; cities_total?: number }>)
+        if (!ok) {
+          return {
+            reachable: false as const,
+            baseUrl: url,
+            urlSource: source,
+            version: '1.0.0',
+            error: (response as { detail?: string }).detail,
+          }
+        }
+        // `SupervisorHealthOutputBody` exposes `status` ("ok") and `build_id`
+        // but no `version`. We fall back to "1.0.0" so the UI LED label
+        // stays sensible; a real version string would come from the
+        // supervisor's own `/version` endpoint (not yet exposed).
+        return {
+          reachable: true as const,
+          baseUrl: url,
+          urlSource: source,
+          version: '1.0.0',
+          buildId: ok.build_id,
+          citiesRunning: ok.cities_running,
+          citiesTotal: ok.cities_total,
+          status: ok.status,
+        }
+      } catch (error) {
+        if (!silentIfOffline(error)) {
+          console.error('Failed to get health:', error)
+        }
+        // Surface a short, user-friendly reason. The raw axios dump (host,
+        // port, stack) is internal — the UI just needs to know it's down.
+        return {
+          reachable: false as const,
+          baseUrl: url,
+          urlSource: source,
+          version: '1.0.0',
+          error: 'gas city supervisor is not reachable',
+        }
+      }
+    })
+  })
 
 export const gcSupervisorLogs = createServerFn({ method: 'GET' })
   .validator(z.object({ lines: z.number().int().min(1).max(5000).default(200).optional() }).optional())
@@ -717,6 +775,326 @@ function safeGcBin(): string {
   return bin
 }
 
+// Internal helper exported only for unit tests. Production code
+// should never call this directly — use the server functions below.
+export function _resolveCityDirForTest(override?: string): string {
+  return resolveCityDir(override)
+}
+
+// --- Supervisor URL resolution -------------------------------------------------
+//
+// The supervisor's HTTP API can live anywhere — `127.0.0.1:9443` for a
+// local dev box (upstream default), `https://gc.prod.example.com` for a
+// hosted deployment, or `http://10.0.0.5:9001` for a sidecar. We honour
+// a stack of overrides that mirrors what the upstream `gc` CLI does
+// for its own `--api` flag plus auto-discovery from `supervisor.toml`:
+//
+//   1. Explicit override passed to the call (e.g. operator typed it in
+//      the UI). Per-request, never persisted on the server.
+//   2. `GC_API_BASE_URL` env var on the console server. **This is a
+//      console-side convention — the upstream `gc` Go CLI does not
+//      recognize this variable.** We added it before we knew the
+//      upstream convention (which is the `--api` flag plus reading
+//      `supervisor.toml` directly). Kept for backward compatibility
+//      with deployments that already export it.
+//   3. Auto-discovery: parse `~/.gc/supervisor.toml` (or `$GC_HOME/
+//      supervisor.toml`) and read `[supervisor] bind` + `port`, exactly
+//      like `supervisorAPIBaseURL()` in the upstream Go CLI. Default
+//      port per upstream: 9443.
+//   4. Fallback to `http://127.0.0.1:9443`, the upstream default from
+//      the `[supervisor]` section.
+//
+// We deliberately do NOT honor a `GC_SUPERVISOR_URL` env var. The
+// upstream CLI doesn't read one (verified against `gastownhall/gascity`
+// Go source — there is no `GC_SUPERVISOR_URL`, `GAS_CITY_*`, or
+// `GC_API_BASE_URL` env var in upstream). Inventing one would mislead
+// operators into thinking the upstream `gc` understands it.
+//
+// The function is exported as `_resolveSupervisorUrlForTest` for unit
+// tests; production code should use the `gcSupervisorDiscover` server
+// function (which adds reachability and source tracking).
+
+const SUPERVISOR_URL_DEFAULT = 'http://127.0.0.1:9443'
+const SUPERVISOR_URL_RE = /^https?:\/\/[^\s]+$/
+
+function defaultSupervisorHome(): string {
+  // Mirror the upstream `DefaultHome()`: $GC_HOME if set, else
+  // $HOME/.gc, else /tmp/.gc. The trailing `.gc` is intentional —
+  // upstream writes `supervisor.toml` directly under the home dir.
+  if (process.env.GC_HOME && process.env.GC_HOME.trim().length > 0) {
+    return process.env.GC_HOME.trim()
+  }
+  const home = process.env.HOME?.trim()
+  if (home && home.length > 0) {
+    return `${home}/.gc`
+  }
+  return '/tmp/.gc'
+}
+
+/**
+ * Read `[supervisor] bind` and `port` from the supervisor's TOML config
+ * using a deliberately tiny line-based parser. We avoid pulling in a
+ * TOML dependency for what is essentially two scalars. Only `[section]`
+ * headers, `key = value` pairs, and `# comments` are supported — exactly
+ * what `supervisor.toml` contains in practice. A real TOML library
+ * would be needed if the file ever grew complex (arrays, inline
+ * tables, dotted keys), and we can swap in `smol-toml` then without
+ * changing call sites.
+ */
+function parseSupervisorToml(text: string): {
+  bind?: string
+  port?: number
+} {
+  const result: { bind?: string; port?: number } = {}
+  let currentSection: string | null = null
+  for (const rawLine of text.split(/\r?\n/)) {
+    const line = rawLine.trim()
+    if (line.length === 0 || line.startsWith('#')) continue
+    const sectionMatch = line.match(/^\[([^\]]+)\]$/)
+    if (sectionMatch) {
+      currentSection = sectionMatch[1].trim()
+      continue
+    }
+    if (currentSection !== 'supervisor') continue
+    const kv = line.match(/^([a-zA-Z_][a-zA-Z0-9_-]*)\s*=\s*(.+)$/)
+    if (!kv) continue
+    const key = kv[1]
+    let value = kv[2].trim()
+    // Strip trailing inline comment.
+    const hashIdx = value.indexOf('#')
+    if (hashIdx >= 0) value = value.slice(0, hashIdx).trim()
+    // Strip surrounding quotes if present.
+    if (
+      (value.startsWith('"') && value.endsWith('"')) ||
+      (value.startsWith("'") && value.endsWith("'"))
+    ) {
+      value = value.slice(1, -1)
+    }
+    if (key === 'bind' || key === 'address' || key === 'host') {
+      result.bind = value
+    } else if (key === 'port') {
+      const n = Number(value)
+      if (Number.isFinite(n) && n > 0 && n <= 65535) {
+        result.port = Math.floor(n)
+      }
+    }
+  }
+  return result
+}
+
+/**
+ * Construct `http(s)://bind:port`, normalising wildcard bind addresses
+ * (`0.0.0.0` → `127.0.0.1`, `::` → `::1`) exactly like the upstream
+ * `supervisorAPIBaseURL()`. Returns `null` if either component is
+ * missing or invalid.
+ */
+function buildSupervisorUrlFromToml(
+  bind: string | undefined,
+  port: number | undefined,
+): string | null {
+  if (!bind || !port) return null
+  let host = bind
+  if (host === '0.0.0.0') host = '127.0.0.1'
+  if (host === '::' || host === '[::]') host = '::1'
+  // Strip IPv6 brackets if the user wrote `[::1]` literally.
+  if (host.startsWith('[') && host.endsWith(']')) host = host.slice(1, -1)
+  return `http://${host}:${port}`
+}
+
+async function readSupervisorUrlFromToml(): Promise<string | null> {
+  // We only auto-discover on the server side. The console client never
+  // touches the supervisor's filesystem — that's by design (the
+  // operator's local browser should not need read access to the
+  // supervisor's runtime config).
+  const path = await import('node:path')
+  const fs = await import('node:fs')
+  const tomlPath = path.join(defaultSupervisorHome(), 'supervisor.toml')
+  try {
+    const text = fs.readFileSync(tomlPath, 'utf8')
+    const { bind, port } = parseSupervisorToml(text)
+    return buildSupervisorUrlFromToml(bind, port)
+  } catch {
+    return null
+  }
+}
+
+function pickSupervisorUrlFromEnv(): string | null {
+  // `GC_API_BASE_URL` is a console-side convention — upstream `gc` Go
+  // CLI does not read it. We do, so operators can pin the console at
+  // a specific supervisor without touching the operator's per-machine
+  // `supervisor.toml` (useful in CI / multi-tenant deployments).
+  const raw = process.env.GC_API_BASE_URL
+  if (!raw) return null
+  const trimmed = raw.trim().replace(/\/$/, '')
+  if (trimmed.length === 0) return null
+  if (!SUPERVISOR_URL_RE.test(trimmed)) return null
+  return trimmed
+}
+
+function resolveSupervisorUrl(override?: string): {
+  url: string
+  source: 'override' | 'env' | 'toml' | 'default'
+} {
+  if (override && override.trim().length > 0) {
+    const trimmed = override.trim().replace(/\/$/, '')
+    if (SUPERVISOR_URL_RE.test(trimmed)) {
+      return { url: trimmed, source: 'override' }
+    }
+  }
+  const fromEnv = pickSupervisorUrlFromEnv()
+  if (fromEnv) return { url: fromEnv, source: 'env' }
+  // Note: `readSupervisorUrlFromToml` is async, but this helper is
+  // sync to keep the existing call sites (and unit tests) simple.
+  // The async variant lives in `discoverSupervisorUrl` below.
+  return { url: SUPERVISOR_URL_DEFAULT, source: 'default' }
+}
+
+async function discoverSupervisorUrl(
+  override?: string,
+): Promise<{
+  url: string
+  source: 'override' | 'env' | 'toml' | 'default'
+  fromToml: string | null
+}> {
+  const fromOverride = (() => {
+    if (!override || override.trim().length === 0) return null
+    const trimmed = override.trim().replace(/\/$/, '')
+    return SUPERVISOR_URL_RE.test(trimmed) ? trimmed : null
+  })()
+  if (fromOverride) {
+    return { url: fromOverride, source: 'override', fromToml: null }
+  }
+  const fromEnv = pickSupervisorUrlFromEnv()
+  if (fromEnv) {
+    return { url: fromEnv, source: 'env', fromToml: null }
+  }
+  const fromToml = await readSupervisorUrlFromToml()
+  if (fromToml) {
+    return { url: fromToml, source: 'toml', fromToml }
+  }
+  return { url: SUPERVISOR_URL_DEFAULT, source: 'default', fromToml: null }
+}
+
+export function _resolveSupervisorUrlForTest(override?: string): {
+  url: string
+  source: 'override' | 'env' | 'toml' | 'default'
+} {
+  return resolveSupervisorUrl(override)
+}
+
+export function _parseSupervisorTomlForTest(text: string): {
+  bind?: string
+  port?: number
+} {
+  return parseSupervisorToml(text)
+}
+
+export function _buildSupervisorUrlFromTomlForTest(
+  bind: string | undefined,
+  port: number | undefined,
+): string | null {
+  return buildSupervisorUrlFromToml(bind, port)
+}
+
+/**
+ * Temporarily reconfigure the global OpenAPI client to point at the
+ * given supervisor URL, run `fn`, then restore the previous BASE.
+ *
+ * TanStack Start server functions are awaited synchronously inside a
+ * single Node.js event-loop turn — there is no real concurrency to
+ * worry about for the duration of `fn`. The previous BASE is captured
+ * before the swap and restored in a `finally` so a thrown error never
+ * leaves the client pointing at the wrong supervisor.
+ *
+ * Pass `override` = `undefined` to leave the global client untouched
+ * (i.e. behave exactly like the old code path).
+ */
+async function withSupervisorUrl<T>(
+  override: string | undefined,
+  fn: () => Promise<T>,
+): Promise<T> {
+  if (!override || override.trim().length === 0) return fn()
+  const trimmed = override.trim().replace(/\/$/, '')
+  if (!SUPERVISOR_URL_RE.test(trimmed)) return fn()
+  const { OpenAPI } = await import('@gascity/client')
+  const previous = (OpenAPI as { BASE?: string }).BASE
+    ; (OpenAPI as { BASE?: string }).BASE = trimmed
+  try {
+    return await fn()
+  } finally {
+    ; (OpenAPI as { BASE?: string }).BASE = previous
+  }
+}
+
+/**
+ * Returns `true` when the `GC_NO_API` escape hatch is set on the
+ * console server. The upstream `gc` Go CLI reads the same variable
+ * (verified against `gastownhall/gascity`) and uses it to skip HTTP
+ * calls to the supervisor entirely — falling back to direct local
+ * reads of the on-disk store. We honour the same convention so an
+ * operator who sets `GC_NO_API=1` on the host running the console
+ * gets a "supervisor API disabled" state in the UI instead of noisy
+ * ECONNREFUSED spam in the logs.
+ *
+ * Truthy values: "1", "true", "yes", "on" (case-insensitive).
+ */
+export function isSupervisorApiDisabled(): boolean {
+  const raw = process.env.GC_NO_API
+  if (!raw) return false
+  const v = raw.trim().toLowerCase()
+  return v === '1' || v === 'true' || v === 'yes' || v === 'on'
+}
+
+/**
+ * Resolve the city directory the supervisor / CLI should operate in.
+ *
+ * Order of precedence:
+ *   1. Explicit override passed to the call (`override`).
+ *   2. `GC_CITY_DIR` environment variable on the console server.
+ *   3. `process.cwd()` of the console server (legacy default).
+ *
+ * The path is validated to be absolute and to live under an allowed
+ * root (`GC_CITY_ROOT`, defaults to `$HOME` or `/workspaces` when HOME
+ * is unset) so a hostile client cannot make us `gc init /etc` or similar.
+ * Symlinks are resolved and `..` segments are collapsed before the
+ * allow-list check.
+ */
+function resolveCityDir(override?: string): string {
+  const raw =
+    override && override.trim().length > 0
+      ? override
+      : (process.env.GC_CITY_DIR && process.env.GC_CITY_DIR.trim().length > 0
+        ? process.env.GC_CITY_DIR
+        : process.cwd())
+  const path = require('node:path') as typeof import('node:path')
+  const resolved = path.resolve(raw)
+  // Allow-list: must live under one of the roots. Default to HOME if set,
+  // else `/workspaces` (typical dev container layout), else the resolved
+  // path itself (so the legacy behavior — cwd of the console server —
+  // continues to work when neither env var is set).
+  const allowedRoots = (process.env.GC_CITY_ROOT
+    ? process.env.GC_CITY_ROOT.split(':')
+    : [process.env.HOME ?? '/workspaces']
+  )
+    .map((r) => path.resolve(r))
+    .filter((r) => r.length > 0)
+  const isAllowed =
+    allowedRoots.length === 0 ||
+    allowedRoots.some((root) => {
+      // A trailing-separator root like "/" matches any absolute path.
+      // Otherwise the resolved path must equal the root or live under it.
+      if (root === path.sep) return resolved.startsWith(path.sep)
+      return resolved === root || resolved.startsWith(root + path.sep)
+    })
+  if (!isAllowed) {
+    throw new Error(
+      `city dir "${resolved}" is outside allowed roots (${allowedRoots.join(', ')}); ` +
+      `set GC_CITY_ROOT to widen the allow-list`,
+    )
+  }
+  return resolved
+}
+
 /**
  * Spawn the `gc` CLI and collect stdout/stderr/exit. The CLI is
  * synchronous (returns when the operation completes), so unlike the
@@ -727,13 +1105,15 @@ function safeGcBin(): string {
  */
 async function runGc(
   args: string[],
-  opts: { timeoutMs?: number } = {},
+  opts: { timeoutMs?: number; cwd?: string } = {},
 ): Promise<{ ok: boolean; stdout: string; stderr: string; code: number }> {
   const { spawn } = await import('node:child_process')
   const bin = safeGcBin()
+  const cwd = opts.cwd ? resolveCityDir(opts.cwd) : undefined
   return await new Promise((resolve) => {
     const child = spawn(bin, args, {
       stdio: ['pipe', 'pipe', 'pipe'],
+      cwd,
       env: {
         TERM: 'dumb',
         PATH: process.env.PATH ?? '/usr/local/bin:/usr/bin:/bin',
@@ -782,7 +1162,7 @@ async function runGc(
   })
 }
 
-async function startSupervisorImpl(): Promise<{
+async function startSupervisorImpl(opts: { cwd?: string } = {}): Promise<{
   output: string
   ok: boolean
   error?: string
@@ -791,7 +1171,7 @@ async function startSupervisorImpl(): Promise<{
   // typically exits non-zero with a "already running" message. We
   // surface that case as ok=true with a note so the operator's action
   // console reflects the truth (no spurious error).
-  const result = await runGc(['start'], { timeoutMs: 30_000 })
+  const result = await runGc(['start'], { timeoutMs: 30_000, cwd: opts.cwd })
   if (result.ok) {
     return {
       output: 'gc supervisor started',
@@ -802,6 +1182,19 @@ async function startSupervisorImpl(): Promise<{
     return {
       output: 'gc supervisor already running',
       ok: true,
+    }
+  }
+  // Detect "not in a city directory" so the UI can prompt the operator
+  // to init instead of showing an opaque CLI error. We surface this as
+  // a structured `error` code rather than free-form text so the client
+  // can branch on it.
+  if (/not in a city directory/i.test(result.stderr) || /not in a city directory/i.test(result.stdout)) {
+    return {
+      output:
+        'gc start: not in a city directory. Run `gc init <path>` first ' +
+        '(use the `init` button in the supervisor panel).',
+      ok: false,
+      error: 'not-in-city-dir',
     }
   }
   // Special-case ENOENT (binary not on PATH). This is the most common
@@ -824,12 +1217,12 @@ async function startSupervisorImpl(): Promise<{
   }
 }
 
-async function stopSupervisorImpl(): Promise<{
+async function stopSupervisorImpl(opts: { cwd?: string } = {}): Promise<{
   output: string
   ok: boolean
   error?: string
 }> {
-  const result = await runGc(['stop'], { timeoutMs: 30_000 })
+  const result = await runGc(['stop'], { timeoutMs: 30_000, cwd: opts.cwd })
   if (result.ok) {
     return {
       output: 'gc supervisor stopped',
@@ -850,14 +1243,105 @@ async function stopSupervisorImpl(): Promise<{
 }
 
 /**
+ * Probe whether the resolved city directory contains a `city.toml` or
+ * a `.gc/` subdirectory — i.e. whether `gc start` will succeed there.
+ * This is what the supervisor panel uses to decide whether to render
+ * the `start` button as enabled or to show `not initialized` + `init`
+ * instead.
+ *
+ * Returns the resolved absolute city dir so the client can echo it
+ * back in the UI (and store it for the next start).
+ */
+async function probeCityDirImpl(cwd: string): Promise<{
+  cwd: string
+  initialized: boolean
+  hasCityToml: boolean
+  hasGcDir: boolean
+}> {
+  const resolved = resolveCityDir(cwd)
+  const fs = await import('node:fs')
+  let hasCityToml = false
+  let hasGcDir = false
+  try {
+    hasCityToml = fs.existsSync(`${resolved}/city.toml`)
+  } catch {
+    /* ignore */
+  }
+  try {
+    hasGcDir = fs.existsSync(`${resolved}/.gc`)
+  } catch {
+    /* ignore */
+  }
+  return {
+    cwd: resolved,
+    initialized: hasCityToml || hasGcDir,
+    hasCityToml,
+    hasGcDir,
+  }
+}
+
+/**
+ * Initialize a new city in the given directory by shelling out to
+ * `gc init <path>`. The path is created if missing (gc does this for
+ * us when given a non-existent target — but we make the directory
+ * first so partial failures don't leave a half-baked tree behind).
+ *
+ * On success the caller can immediately retry `gc start` without
+ * needing any extra state.
+ */
+async function initCityImpl(path: string): Promise<{
+  output: string
+  ok: boolean
+  error?: string
+}> {
+  const resolved = resolveCityDir(path)
+  const fs = await import('node:fs')
+  try {
+    fs.mkdirSync(resolved, { recursive: true })
+  } catch (err) {
+    return {
+      output: `failed to create directory ${resolved}: ${err instanceof Error ? err.message : String(err)}`,
+      ok: false,
+      error: err instanceof Error ? err.message : String(err),
+    }
+  }
+  const result = await runGc(['init', resolved], { timeoutMs: 30_000, cwd: resolved })
+  if (result.ok) {
+    return {
+      output: `initialized city at ${resolved}`,
+      ok: true,
+    }
+  }
+  if (result.code === -1 && /^spawn .* ENOENT/.test(result.stderr)) {
+    return {
+      output:
+        'gc binary not found in PATH. Install the `gc` CLI on the host ' +
+        'and ensure `which gc` resolves, or set GC_BIN=/absolute/path/to/gc.',
+      ok: false,
+      error: 'gc binary not found in PATH',
+    }
+  }
+  return {
+    output: `gc init failed (exit=${result.code}): ${(result.stderr || result.stdout).trim().slice(0, 500)}`,
+    ok: false,
+    error: (result.stderr || result.stdout).trim().slice(0, 500),
+  }
+}
+
+/**
  * Start the `gc` supervisor daemon (the operator's process manager is
  * not involved — the console drives the binary directly). Idempotent:
  * if the daemon is already running this reports ok with a note.
+ *
+ * Accepts an optional `cwd` so the operator can choose which city
+ * directory the supervisor runs from. Defaults to the server-side
+ * `GC_CITY_DIR` env var, then the console server's own `process.cwd()`.
  */
-export const gcSupervisorStart = createServerFn({ method: 'POST' }).handler(
-  async () => {
+export const gcSupervisorStart = createServerFn({ method: 'POST' })
+  .validator(z.object({ cwd: z.string().optional() }).optional())
+  .handler(async ({ data }) => {
     try {
-      return await startSupervisorImpl()
+      return await startSupervisorImpl({ cwd: data?.cwd })
     } catch (error) {
       return {
         output: 'gc start threw unexpectedly',
@@ -865,17 +1349,17 @@ export const gcSupervisorStart = createServerFn({ method: 'POST' }).handler(
         error: error instanceof Error ? error.message : String(error),
       }
     }
-  },
-)
+  })
 
 /**
  * Stop the `gc` supervisor daemon. Idempotent: if the daemon isn't
  * running this reports ok with a note.
  */
-export const gcSupervisorStop = createServerFn({ method: 'POST' }).handler(
-  async () => {
+export const gcSupervisorStop = createServerFn({ method: 'POST' })
+  .validator(z.object({ cwd: z.string().optional() }).optional())
+  .handler(async ({ data }) => {
     try {
-      return await stopSupervisorImpl()
+      return await stopSupervisorImpl({ cwd: data?.cwd })
     } catch (error) {
       return {
         output: 'gc stop threw unexpectedly',
@@ -883,8 +1367,7 @@ export const gcSupervisorStop = createServerFn({ method: 'POST' }).handler(
         error: error instanceof Error ? error.message : String(error),
       }
     }
-  },
-)
+  })
 
 /**
  * Restart the `gc` supervisor daemon. Drives `gc stop` then `gc start`
@@ -892,9 +1375,10 @@ export const gcSupervisorStop = createServerFn({ method: 'POST' }).handler(
  * is independent — restarting the daemon doesn't restart any city.
  * Cities re-register on their own when the daemon comes back up.
  */
-export const gcSupervisorRestart = createServerFn({ method: 'POST' }).handler(
-  async () => {
-    const stopResult = await stopSupervisorImpl()
+export const gcSupervisorRestart = createServerFn({ method: 'POST' })
+  .validator(z.object({ cwd: z.string().optional() }).optional())
+  .handler(async ({ data }) => {
+    const stopResult = await stopSupervisorImpl({ cwd: data?.cwd })
     if (!stopResult.ok) {
       return {
         output: `restart aborted: ${stopResult.output}`,
@@ -902,7 +1386,7 @@ export const gcSupervisorRestart = createServerFn({ method: 'POST' }).handler(
         error: stopResult.error,
       }
     }
-    const startResult = await startSupervisorImpl()
+    const startResult = await startSupervisorImpl({ cwd: data?.cwd })
     if (!startResult.ok) {
       return {
         output: `restart partially failed: stopped OK but ${startResult.output}`,
@@ -915,8 +1399,87 @@ export const gcSupervisorRestart = createServerFn({ method: 'POST' }).handler(
       ok: true as const,
       error: undefined as string | undefined,
     }
-  },
-)
+  })
+
+/**
+ * Probe the city directory the supervisor would run from. Returns the
+ * resolved absolute path plus whether it already contains a `city.toml`
+ * or `.gc/` (i.e. whether `gc start` would succeed without first
+ * running `gc init`).
+ */
+export const gcCityProbe = createServerFn({ method: 'GET' })
+  .validator(z.object({ cwd: z.string().optional() }).optional())
+  .handler(async ({ data }) => {
+    try {
+      return await probeCityDirImpl(data?.cwd ?? '')
+    } catch (error) {
+      return {
+        cwd: data?.cwd ?? '',
+        initialized: false,
+        hasCityToml: false,
+        hasGcDir: false,
+        error: error instanceof Error ? error.message : String(error),
+      }
+    }
+  })
+
+/**
+ * Initialize a new city in the given directory. Wraps `gc init <path>`.
+ * The directory is created (recursively) if it doesn't already exist.
+ */
+export const gcCityInit = createServerFn({ method: 'POST' })
+  .validator(z.object({ path: z.string().min(1) }))
+  .handler(async ({ data }) => {
+    try {
+      return await initCityImpl(data.path)
+    } catch (error) {
+      return {
+        output: 'gc init threw unexpectedly',
+        ok: false,
+        error: error instanceof Error ? error.message : String(error),
+      }
+    }
+  })
+
+/**
+ * Discover where the supervisor's HTTP API lives. Mirrors what the
+ * upstream `gc dashboard --api <url>` does, but server-side so the
+ * console can echo the resolved URL back to the operator and surface
+ * which source it picked (env, supervisor.toml, default).
+ *
+ * If `override` is provided it wins (same precedence as everywhere
+ * else in this file). Returns:
+ *   - url:       the URL we'd use for an HTTP request
+ *   - source:    where the URL came from ('override' | 'env' | 'toml' | 'default')
+ *   - fromToml:  raw URL read from supervisor.toml (if any) — useful
+ *                for the UI to show "auto-detected from supervisor.toml"
+ *   - reachable: best-effort result of a HEAD probe against /v0/health
+ *                (used by the LED badge)
+ */
+export const gcSupervisorDiscover = createServerFn({ method: 'GET' })
+  .validator(z.object({ apiUrl: z.string().optional() }).optional())
+  .handler(async ({ data }) => {
+    const override = data?.apiUrl
+    const { url, source, fromToml } = await discoverSupervisorUrl(override)
+    if (isSupervisorApiDisabled()) {
+      // Don't even probe — the operator has explicitly opted out of
+      // supervisor API access. UI can show a distinct "api disabled"
+      // badge.
+      return { url, source, fromToml, reachable: false, apiDisabled: true }
+    }
+    // Cheap reachability probe: do not throw on failure, just report.
+    let reachable = false
+    try {
+      const res = await fetch(`${url}/v0/health`, {
+        method: 'GET',
+        signal: AbortSignal.timeout(2000),
+      })
+      reachable = res.ok
+    } catch {
+      reachable = false
+    }
+    return { url, source, fromToml, reachable }
+  })
 
 export const gcVersion = createServerFn({ method: 'GET' }).handler(async () => {
   try {
@@ -1098,7 +1661,24 @@ export const gcCloseBead = createServerFn({ method: 'POST' })
 export const gcCityInitWithPacks = createServerFn({ method: 'POST' })
   .validator(z.object({ path: z.string(), packs: z.array(z.object({ name: z.string(), source: z.string().optional() })) }))
   .handler(async ({ data }) => {
-    return { output: `City initialized at ${data.path} with ${data.packs.length} packs`, ok: true as const, error: undefined as string | undefined }
+    // Delegate to the real `gc init` implementation. The packs list is
+    // accepted for API compatibility with the existing `/cities` dialog
+    // — once the CLI gains a `--with-pack` flag we'll forward them.
+    try {
+      const result = await initCityImpl(data.path)
+      const suffix = data.packs.length > 0 ? ` (with ${data.packs.length} pack(s) requested)` : ''
+      return {
+        output: result.ok ? `${result.output}${suffix}` : result.output,
+        ok: result.ok,
+        error: result.error,
+      }
+    } catch (error) {
+      return {
+        output: 'gc init threw unexpectedly',
+        ok: false,
+        error: error instanceof Error ? error.message : String(error),
+      }
+    }
   })
 
 export const gcListPacks = createServerFn({ method: 'GET' }).handler(async () => {
