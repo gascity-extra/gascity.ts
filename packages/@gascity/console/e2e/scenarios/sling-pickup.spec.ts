@@ -48,7 +48,7 @@ test.describe('Sling → pickup → result', () => {
   // Operator workflow in a properly provisioned environment would
   // call `gc init` + `gc start` to bootstrap a fresh city per run
   // (see `gcCityInitWithPacks` in `gc.functions.ts`).
-  const cityPath = '/tmp/gc-e2e-test';
+  const cityPath = '/tmp/gc-fresh-test';
   const markerPath = join(cityPath, `marker-${runId}`);
   const markerContents = `done-${runId}`;
   const taskText =
@@ -112,9 +112,12 @@ test.describe('Sling → pickup → result', () => {
     const citySelect = page.locator('select').first();
     const cityName = cityPath.split('/').filter(Boolean).pop()!
     await citySelect.selectOption(cityName);
-    await page.waitForTimeout(500);
+    // Wait for the agents query to complete after city selection
+    await page.waitForTimeout(2000);
     // Second dropdown: agent. Pick the first real (non-placeholder) one.
     const agentSelect = page.locator('select').nth(1);
+    // Wait for agents to load
+    await expect(agentSelect.locator('option').filter({ hasText: /^(?!choose).+/ })).toBeVisible({ timeout: 10_000 });
     const agentOptions = await agentSelect.locator('option').all();
     let agentToUse: string | undefined;
     for (const opt of agentOptions) {

@@ -144,24 +144,29 @@ export class E2EActions {
    * Open sling drawer
    */
   async openSlingDrawer() {
-    // Wait for the sidebar's "+ sling task" button to attach. Hydration
-    // can take 5-10s on a cold dev server, and the button isn't
-    // interactive until React has mounted the listener.
-    const slingButton = this.page.getByRole('button', {
-      name: /\+\s*sling task/,
-    });
-    await expect(slingButton.first()).toBeEnabled({ timeout: 30_000 });
-    await slingButton.first().click();
+    // Close the supervisor popover if it's open by pressing Escape
+    // The popover is controlled by the supervisorOpen state
+    const supervisorToggle = this.page.locator('button[title="supervisor (v)"]');
+    const isExpanded = await supervisorToggle.getAttribute('aria-expanded');
+    if (isExpanded === 'true') {
+      // Press Escape to close the popover
+      await this.page.keyboard.press('Escape');
+      // Wait for the popover to actually close
+      await expect(supervisorToggle).toHaveAttribute('aria-expanded', 'false', { timeout: 5000 });
+      await this.page.waitForTimeout(500);
+    }
 
-    // Wait for the drawer's city <select> to appear (it renders as a
-    // pair of dropdowns: city + agent). The drawer isn't a real
-    // `<dialog>` element — it's a positioned div — so role=dialog
-    // would fail to match.
+    // Click the "+ sling task" button in the sidebar
+    const slingButton = this.page.locator('button:has-text("+ sling task")');
+    await expect(slingButton).toBeVisible({ timeout: 30_000 });
+    await slingButton.click({ force: true });
+
+    // Wait for the drawer to render - check for the SlingComposer content
     await expect(this.page.locator('select').first()).toBeVisible({
       timeout: 15_000,
     });
-    // Give the drawer's initial queries (gcListCities + gcListAgents)
-    // a moment to settle so the city dropdown has real options.
+    
+    // Give the drawer's initial queries a moment to settle
     await this.page.waitForTimeout(2000);
   }
 
