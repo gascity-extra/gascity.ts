@@ -19,6 +19,7 @@
     "./features/cursor": {
       "version": "latest"
     },
+    "./features/kilo": {},
     "./features/playwright": {
       "browsers": "chromium",
       "installMethod": "auto"

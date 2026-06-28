@@ -1,0 +1,15 @@
+{
+    "id": "kilo-cli",
+    "version": "1.0.0",
+    "name": "Kilo CLI",
+    "description": "Install the Kilo CLI (Kilo-Org/tap/kilo via Homebrew) and its libnotify-bin apt dependency.",
+    "documentationURL": "https://kilocode.ai",
+    "license": "MIT",
+    "keywords": ["ai", "kilo", "cli", "homebrew"],
+    "options": {},
+    "dependsOn": {
+        "./homebrew": {
+            "packages": ["Kilo-Org/tap/kilo"]
+        }
+    }
+}
