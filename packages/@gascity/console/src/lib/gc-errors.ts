@@ -45,3 +45,30 @@ export function silentIfOffline(error: unknown): boolean {
     if (cause && cause !== error) return silentIfOffline(cause)
     return false
 }
+
+/**
+ * Returns `true` when the `gc` CLI rejected an operation because it
+ * couldn't locate a city directory. This is a deployment-config issue,
+ * not a runtime error: the operator either needs to set `GC_CITY_DIR`
+ * in the console server's environment, or run the console from inside
+ * a bootstrapped city directory.
+ *
+ * The upstream message is `gc <cmd>: could not find city or pack root
+ * from <path>` — emitted by `gascity`'s `walkupCityRoot` walker when no
+ * `city.toml` or `.gc/` is found in the cwd ancestry.
+ */
+export function isCityNotConfigured(stderr: string | undefined): boolean {
+    if (!stderr) return false
+    return /could not find city or pack root/i.test(stderr)
+}
+
+/**
+ * Friendly remediation hint when `gc` reports the city directory is
+ * missing. Shown to the operator so they know to set GC_CITY_DIR or
+ * run the console from inside a city dir.
+ */
+export const CITY_NOT_CONFIGURED_HINT =
+    'gc could not locate a city directory. ' +
+    'Set GC_CITY_DIR to point at a bootstrapped city (one with city.toml ' +
+    'or a .gc/ subdir), or run the console from inside the city directory.'
+

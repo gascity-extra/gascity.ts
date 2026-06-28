@@ -207,10 +207,10 @@ function InitCityDialog({
         <div className="flex items-center justify-between border-b border-border px-4 py-2.5">
           <span className="font-mono text-xs text-foreground">new city</span>
           <Link
-            to="/packs"
+            to="/marketplace"
             className="font-mono text-[11px] text-muted-foreground hover:text-foreground"
           >
-            manage packs →
+            browse marketplace →
           </Link>
         </div>
         <div className="px-4 py-3">

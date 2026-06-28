@@ -22,7 +22,7 @@ const NAV = [
   { to: "/formulas", label: "Formulas", key: "f" },
   { to: "/orders", label: "Orders", key: "o" },
   { to: "/cities", label: "Cities", key: "c" },
-  { to: "/packs", label: "Packs", key: "p" },
+  { to: "/marketplace", label: "Marketplace", key: "k" },
   { to: "/endpoints", label: "Endpoints", key: "e" },
 ] as const;
 
@@ -70,16 +70,18 @@ export function AppShell({ children }: { children: ReactNode }) {
 
 
   return (
-    <div className="flex min-h-screen flex-col bg-background text-foreground">
+    <div className="flex h-screen flex-col overflow-hidden bg-background text-foreground">
       <Header
         onPalette={() => setPaletteOpen(true)}
         supervisorOpen={supervisorOpen}
         onSupervisorToggle={() => setSupervisorOpen((v) => !v)}
         onSupervisorClose={() => setSupervisorOpen(false)}
       />
-      <div className="flex flex-1 min-h-0">
+      <div className="flex min-h-0 flex-1">
         <Sidebar pathname={pathname} onSling={() => setComposerOpen(true)} />
-        <main className="flex-1 min-w-0 overflow-hidden">{children}</main>
+        <main className="flex min-h-0 min-w-0 flex-1 overflow-hidden">
+          {children}
+        </main>
       </div>
       <CommandPalette
         open={paletteOpen}
@@ -659,7 +661,7 @@ function Sidebar({
   onSling: () => void;
 }) {
   return (
-    <nav className="flex w-48 shrink-0 flex-col border-r border-border">
+    <nav className="flex h-full w-48 shrink-0 flex-col overflow-y-auto border-r border-border">
       <button
         onClick={onSling}
         className="m-3 rounded border border-foreground bg-foreground px-3 py-1.5 text-left font-mono text-xs text-background hover:opacity-90"
@@ -746,7 +748,7 @@ function CommandPalette({
               <PaletteItem onSelect={() => go("/formulas")}>formulas</PaletteItem>
               <PaletteItem onSelect={() => go("/orders")}>orders</PaletteItem>
               <PaletteItem onSelect={() => go("/cities")}>cities</PaletteItem>
-              <PaletteItem onSelect={() => go("/packs")}>packs</PaletteItem>
+              <PaletteItem onSelect={() => go("/marketplace")}>marketplace</PaletteItem>
               <PaletteItem onSelect={() => go("/endpoints")}>endpoints</PaletteItem>
             </Command.Group>
           </Command.List>

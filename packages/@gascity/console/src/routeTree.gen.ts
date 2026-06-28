@@ -11,6 +11,7 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as PacksRouteImport } from './routes/packs'
 import { Route as OrdersRouteImport } from './routes/orders'
+import { Route as MarketplaceRouteImport } from './routes/marketplace'
 import { Route as MailRouteImport } from './routes/mail'
 import { Route as EndpointsRouteImport } from './routes/endpoints'
 import { Route as CitiesRouteImport } from './routes/cities'
@@ -30,6 +31,11 @@ const PacksRoute = PacksRouteImport.update({
 const OrdersRoute = OrdersRouteImport.update({
   id: '/orders',
   path: '/orders',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const MarketplaceRoute = MarketplaceRouteImport.update({
+  id: '/marketplace',
+  path: '/marketplace',
   getParentRoute: () => rootRouteImport,
 } as any)
 const MailRoute = MailRouteImport.update({
@@ -89,6 +95,7 @@ export interface FileRoutesByFullPath {
   '/cities': typeof CitiesRoute
   '/endpoints': typeof EndpointsRoute
   '/mail': typeof MailRoute
+  '/marketplace': typeof MarketplaceRoute
   '/orders': typeof OrdersRoute
   '/packs': typeof PacksRoute
   '/api/pty': typeof ApiPtyRoute
@@ -103,6 +110,7 @@ export interface FileRoutesByTo {
   '/cities': typeof CitiesRoute
   '/endpoints': typeof EndpointsRoute
   '/mail': typeof MailRoute
+  '/marketplace': typeof MarketplaceRoute
   '/orders': typeof OrdersRoute
   '/packs': typeof PacksRoute
   '/api/pty': typeof ApiPtyRoute
@@ -118,6 +126,7 @@ export interface FileRoutesById {
   '/cities': typeof CitiesRoute
   '/endpoints': typeof EndpointsRoute
   '/mail': typeof MailRoute
+  '/marketplace': typeof MarketplaceRoute
   '/orders': typeof OrdersRoute
   '/packs': typeof PacksRoute
   '/api/pty': typeof ApiPtyRoute
@@ -134,6 +143,7 @@ export interface FileRouteTypes {
     | '/cities'
     | '/endpoints'
     | '/mail'
+    | '/marketplace'
     | '/orders'
     | '/packs'
     | '/api/pty'
@@ -148,6 +158,7 @@ export interface FileRouteTypes {
     | '/cities'
     | '/endpoints'
     | '/mail'
+    | '/marketplace'
     | '/orders'
     | '/packs'
     | '/api/pty'
@@ -162,6 +173,7 @@ export interface FileRouteTypes {
     | '/cities'
     | '/endpoints'
     | '/mail'
+    | '/marketplace'
     | '/orders'
     | '/packs'
     | '/api/pty'
@@ -177,6 +189,7 @@ export interface RootRouteChildren {
   CitiesRoute: typeof CitiesRoute
   EndpointsRoute: typeof EndpointsRoute
   MailRoute: typeof MailRoute
+  MarketplaceRoute: typeof MarketplaceRoute
   OrdersRoute: typeof OrdersRoute
   PacksRoute: typeof PacksRoute
   ApiPtyRoute: typeof ApiPtyRoute
@@ -200,6 +213,13 @@ declare module '@tanstack/react-router' {
       path: '/orders'
       fullPath: '/orders'
       preLoaderRoute: typeof OrdersRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/marketplace': {
+      id: '/marketplace'
+      path: '/marketplace'
+      fullPath: '/marketplace'
+      preLoaderRoute: typeof MarketplaceRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/mail': {
@@ -281,6 +301,7 @@ const rootRouteChildren: RootRouteChildren = {
   CitiesRoute: CitiesRoute,
   EndpointsRoute: EndpointsRoute,
   MailRoute: MailRoute,
+  MarketplaceRoute: MarketplaceRoute,
   OrdersRoute: OrdersRoute,
   PacksRoute: PacksRoute,
   ApiPtyRoute: ApiPtyRoute,
@@ -292,12 +313,3 @@ const rootRouteChildren: RootRouteChildren = {
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
-
-import type { getRouter } from './router.tsx'
-import type { createStart } from '@tanstack/react-start'
-declare module '@tanstack/react-start' {
-  interface Register {
-    ssr: true
-    router: Awaited<ReturnType<typeof getRouter>>
-  }
-}

@@ -19,14 +19,14 @@ test.describe('Navigation Tests', () => {
     await expect(page).toHaveURL(/\/cities/);
   });
 
-  test('can access packs page', async ({ page, baseURL }) => {
-    // Navigate to packs page
-    await page.goto(`${baseURL}/packs`);
+  test('can access marketplace page', async ({ page, baseURL }) => {
+    // Navigate to marketplace page
+    await page.goto(`${baseURL}/marketplace`);
     await page.waitForLoadState('domcontentloaded');
-    
-    // Check that we're on the packs page
-    await expect(page).toHaveURL(/\/packs/);
-    
+
+    // Check that we're on the marketplace page
+    await expect(page).toHaveURL(/\/marketplace/);
+
     // Check that the page has content
     const body = page.locator('body');
     await expect(body).toBeVisible();

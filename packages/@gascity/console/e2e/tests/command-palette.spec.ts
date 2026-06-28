@@ -51,7 +51,7 @@ test.describe('Command Palette Tests', () => {
     await page.waitForTimeout(500);
 
     const pageContent = await page.content();
-    expect(pageContent.toLowerCase()).toMatch(/navigate|sessions|mail|beads|formulas|orders|cities|packs|endpoints/);
+    expect(pageContent.toLowerCase()).toMatch(/navigate|sessions|mail|beads|formulas|orders|cities|marketplace|endpoints/);
 
     await page.keyboard.press('Escape');
     await page.waitForTimeout(500);

@@ -12,7 +12,9 @@
 import { createServerFn } from '@tanstack/react-start'
 import { z } from 'zod'
 import { DefaultService, configureGasCityClient } from '@gascity/client'
-import { silentIfOffline } from './gc-errors'
+import { silentIfOffline, isCityNotConfigured, CITY_NOT_CONFIGURED_HINT } from './gc-errors'
+import { derivePackName, PACK_NAME_RE } from './packs-catalog'
+import { summariseRegistryCommand } from './registry-feedback'
 
 // Configure the OpenAPI-generated client once at module load. Without this,
 // `DefaultService.*` calls hit `axios` with an empty `BASE`, which throws
@@ -1135,6 +1137,92 @@ function resolveCityDir(override?: string): string {
   return resolved
 }
 
+// ---------------------------------------------------------------------------
+// Auto-discovered city directory (from the supervisor API)
+//
+// When the console server boots it doesn't necessarily know where the
+// operator's city lives — `gc <cmd>` would fail with "could not find
+// city or pack root" because the console's cwd is the npm package
+// directory, not a bootstrapped city.
+//
+// Solution: query the supervisor's `GET /v0/cities` endpoint once on
+// startup (and refresh on TTL), pick the first city's `path`, and
+// pass it to every `gc` invocation via the global `--city` flag. The
+// operator no longer has to set `GC_CITY_DIR` as long as their
+// supervisor has at least one registered city — which is the same
+// precondition as running the console at all.
+//
+// The cache is per-process and refreshed every `CITY_DISCOVERY_TTL_MS`.
+// A failure to reach the supervisor is treated as "no cached city" —
+// callers fall back to the existing GC_CITY_DIR / cwd chain rather
+// than throwing.
+
+const CITY_DISCOVERY_TTL_MS = 30_000
+
+interface CityDiscoveryEntry {
+  fetchedAt: number
+  cityDir: string | null
+  error?: string
+}
+
+let cityDiscovery: CityDiscoveryEntry | null = null
+
+/**
+ * Query the supervisor for a city directory. Async because the
+ * supervisor's HTTP API is async; the result is memoised in-process
+ * for `CITY_DISCOVERY_TTL_MS` so the marketplace isn't slowed by a
+ * per-call round-trip.
+ */
+async function discoverCityDir(): Promise<string | null> {
+  const now = Date.now()
+  if (cityDiscovery && now - cityDiscovery.fetchedAt < CITY_DISCOVERY_TTL_MS) {
+    return cityDiscovery.cityDir
+  }
+  try {
+    const response = await DefaultService.getV0Cities()
+    const ok = unwrap(
+      response as Envelope<{
+        items?: Array<{ name?: string; path?: string; status?: string }>
+      }>,
+    )
+    const first = (ok?.items ?? []).find(
+      (c) => typeof c?.path === 'string' && c.path.length > 0,
+    )
+    cityDiscovery = {
+      fetchedAt: now,
+      cityDir: first?.path ?? null,
+      error: first ? undefined : 'no cities registered with supervisor',
+    }
+    return cityDiscovery.cityDir
+  } catch (err) {
+    cityDiscovery = {
+      fetchedAt: now,
+      cityDir: null,
+      error: err instanceof Error ? err.message : String(err),
+    }
+    return null
+  }
+}
+
+/**
+ * Async variant: prefers a city path auto-discovered from the
+ * supervisor, then falls back to `resolveCityDir` (which honors
+ * `GC_CITY_DIR` and `cwd` as before). Used by every server fn that
+ * spawns `gc` so we never have to ship a `cwd` env var with the
+ * console process.
+ */
+async function resolveCityDirAsync(override?: string): Promise<string> {
+  if (override && override.trim().length > 0) {
+    return resolveCityDir(override)
+  }
+  const discovered = await discoverCityDir()
+  if (discovered) return discovered
+  // Fall back to env var / cwd. We deliberately don't pass the
+  // discovered-error through here — `runGc`'s stderr will surface
+  // any subsequent CLI failure with a clearer message anyway.
+  return resolveCityDir()
+}
+
 /**
  * Spawn the `gc` CLI and collect stdout/stderr/exit. The CLI is
  * synchronous (returns when the operation completes), so unlike the
@@ -1149,11 +1237,30 @@ async function runGc(
 ): Promise<{ ok: boolean; stdout: string; stderr: string; code: number }> {
   const { spawn } = await import('node:child_process')
   const bin = safeGcBin()
-  const cwd = opts.cwd ? resolveCityDir(opts.cwd) : undefined
+  // Resolve the city directory:
+  //   1. caller-supplied `opts.cwd` (already allow-listed)
+  //   2. auto-discovered from the supervisor API (cached 30s)
+  //   3. env `GC_CITY_DIR`
+  //   4. fallback to server cwd (legacy)
+  //
+  // We then pass it explicitly via the global `--city` flag so the
+  // spawn cwd can stay wherever the operator launched the console
+  // (typically an npm package dir). This is what fixes the
+  // "could not find city or pack root" error for operators whose
+  // supervisor already has a city registered — the console no
+  // longer needs to live inside that city directory.
+  let cityDir: string | undefined
+  if (opts.cwd && opts.cwd.trim().length > 0) {
+    cityDir = resolveCityDir(opts.cwd)
+  } else {
+    const discovered = await discoverCityDir()
+    cityDir = discovered ?? resolveCityDir()
+  }
+  const finalArgs = cityDir ? [...args, '--city', cityDir] : args
   return await new Promise((resolve) => {
-    const child = spawn(bin, args, {
+    const child = spawn(bin, finalArgs, {
       stdio: ['pipe', 'pipe', 'pipe'],
-      cwd,
+      cwd: undefined,
       env: {
         TERM: 'dumb',
         PATH: process.env.PATH ?? '/usr/local/bin:/usr/bin:/bin',
@@ -1200,6 +1307,52 @@ async function runGc(
     })
     child.stdin.end()
   })
+}
+
+/**
+ * Classify a failed `runGc` result into a uniform `{ output, error }`
+ * pair for the UI. The most useful distinctions:
+ *
+ *   - `ENOENT` (spawn) → the `gc` binary is missing on PATH. The UI
+ *     surfaces "install gc or set GC_BIN".
+ *   - `could not find city or pack root` (stderr) → the console server
+ *     isn't running from inside a city directory, and GC_CITY_DIR
+ *     isn't set. The UI surfaces CITY_NOT_CONFIGURED_HINT so the
+ *     operator can fix the deployment.
+ *   - Anything else → raw stderr/stdout, trimmed to 500 chars.
+ *
+ * `kind` is exposed alongside the human strings so the UI can show a
+ * tailored banner (e.g. "deployment config required" vs "cli error")
+ * without having to re-parse the strings.
+ */
+function classifyGcFailure(
+  r: { ok: boolean; stdout: string; stderr: string; code: number },
+  command: string,
+): {
+  output: string
+  error: string
+  kind: 'missing_binary' | 'city_not_configured' | 'cli_error'
+} {
+  if (r.code === -1 && /^spawn .* ENOENT/.test(r.stderr)) {
+    return {
+      output: 'gc binary not found in PATH',
+      error: 'gc binary not found in PATH — install gc or set GC_BIN',
+      kind: 'missing_binary',
+    }
+  }
+  if (isCityNotConfigured(r.stderr)) {
+    return {
+      output: `${command}: city directory not configured`,
+      error: CITY_NOT_CONFIGURED_HINT,
+      kind: 'city_not_configured',
+    }
+  }
+  const detail = (r.stderr || r.stdout).trim().slice(0, 800)
+  return {
+    output: `${command} failed: ${detail}`,
+    error: detail,
+    kind: 'cli_error',
+  }
 }
 
 async function startSupervisorImpl(opts: { cwd?: string } = {}): Promise<{
@@ -1725,14 +1878,25 @@ export const gcCityInitWithPacks = createServerFn({ method: 'POST' })
 export const gcListPacks = createServerFn({ method: 'GET' }).handler(async () => {
   try {
     const response = await DefaultService.getV0CityByCityNamePacks(CITY)
-    const ok = unwrap(response as Envelope<{ items?: any[] }>)
+    // The supervisor returns `{ packs: PackResponse[] }` per the OpenAPI
+    // schema (`PackListBody`); older clients may still send `{ items }`
+    // so we accept both.
+    const ok = unwrap(response as Envelope<{
+      packs?: Array<{ name?: string; source?: string; path?: string; ref?: string; builtin?: boolean; description?: string }>
+      items?: Array<{ name?: string; source?: string; path?: string; ref?: string; builtin?: boolean; description?: string }>
+    }>)
     if (!ok) return []
-    return (ok.items ?? []).map((pack: any) => ({
-      name: pack.name,
-      source: pack.source,
-      description: pack.description,
-      builtin: pack.builtin || false,
-    }))
+    const raw = ok.packs ?? ok.items ?? []
+    return raw
+      .filter((p) => typeof p?.name === 'string' && p.name.length > 0)
+      .map((p) => ({
+        name: String(p.name),
+        source: typeof p.source === 'string' ? p.source : undefined,
+        path: typeof p.path === 'string' ? p.path : undefined,
+        ref: typeof p.ref === 'string' ? p.ref : undefined,
+        description: typeof p.description === 'string' ? p.description : undefined,
+        builtin: Boolean(p.builtin),
+      }))
   } catch (error) {
     if (!silentIfOffline(error)) {
       console.error('Failed to list packs:', error)
@@ -1751,17 +1915,868 @@ export const gcDoltState = createServerFn({ method: 'GET' })
     }
   })
 
+/**
+ * Register a pack import in the current city.
+ *
+ * Wraps `gc import add <source> [--name <name>]`, which writes a
+ * durable `[imports.<name>]` entry to `pack.toml` and pins it in
+ * `packs.lock`. Accepts:
+ *   - `source`: required. Either a local path, a git URL, or the
+ *     "double-slash" subpath form documented in `gc import add --help`
+ *     (e.g. `https://github.com/gastownhall/gascity-packs//bmad`).
+ *   - `name`:   optional local binding name. Falls back to the pack
+ *     directory name extracted from the source URL when omitted.
+ *   - `cwd`:    optional city directory. Defaults to the server-side
+ *     `GC_CITY_DIR` / console cwd (see `resolveCityDir`).
+ *
+ * The function is idempotent in spirit: re-registering an existing
+ * import is delegated to `gc import add`, which the CLI surfaces
+ * cleanly. ENOENT (binary missing) gets a tailored message.
+ */
 export const gcRegisterPack = createServerFn({ method: 'POST' })
-  .validator(z.object({ name: z.string() }))
+  .validator(
+    z.object({
+      name: z.string().optional(),
+      source: z.string().min(1),
+      cwd: z.string().optional(),
+    }),
+  )
   .handler(async ({ data }) => {
-    return { output: `Pack ${data.name} registered`, ok: true, error: undefined as string | undefined }
+    const args = ['import', 'add', data.source]
+    // Only pass `--name` if the caller supplied an explicit binding
+    // name. Letting `gc` derive the name from the source keeps the
+    // behaviour aligned with `gc import add <source>` in the shell.
+    if (data.name && data.name.trim().length > 0) {
+      args.push('--name', data.name.trim())
+    }
+    try {
+      const r = await runGc(args, { timeoutMs: 60_000, cwd: data.cwd })
+      if (r.ok) {
+        return {
+          ok: true as const,
+          output: r.stdout.trim() || `pack "${data.name ?? derivePackName(data.source)}" registered`,
+          error: undefined as string | undefined,
+        }
+      }
+      return { ok: false as const, ...classifyGcFailure(r, 'gc import add') }
+    } catch (err) {
+      return {
+        ok: false as const,
+        output: 'gc import add threw unexpectedly',
+        error: err instanceof Error ? err.message : String(err),
+      }
+    }
   })
 
+/**
+ * Unregister a pack import. Wraps `gc import remove <name>`. After
+ * successful removal, the `pack.toml` entry and `packs.lock` pin are
+ * gone; cached clones under `~/.gc/cache` are left intact (use
+ * `gc import prune` to reclaim them).
+ */
 export const gcUnregisterPack = createServerFn({ method: 'POST' })
-  .validator(z.object({ name: z.string() }))
+  .validator(
+    z.object({
+      name: z.string().min(1),
+      cwd: z.string().optional(),
+    }),
+  )
   .handler(async ({ data }) => {
-    return { output: `Pack ${data.name} unregistered`, ok: true, error: undefined as string | undefined }
+    if (!PACK_NAME_RE.test(data.name)) {
+      return {
+        ok: false as const,
+        output: `invalid pack name "${data.name}"`,
+        error: 'pack names may only contain letters, digits, dot, underscore, dash, and slash',
+      }
+    }
+    try {
+      const r = await runGc(['import', 'remove', data.name], {
+        timeoutMs: 30_000,
+        cwd: data.cwd,
+      })
+      if (r.ok) {
+        return {
+          ok: true as const,
+          output: r.stdout.trim() || `pack "${data.name}" unregistered`,
+          error: undefined as string | undefined,
+        }
+      }
+      return { ok: false as const, ...classifyGcFailure(r, 'gc import remove') }
+    } catch (err) {
+      return {
+        ok: false as const,
+        output: 'gc import remove threw unexpectedly',
+        error: err instanceof Error ? err.message : String(err),
+      }
+    }
   })
+
+// Marketplace
+//
+// The console ships a Marketplace UI that shows every pack declared
+// in a `registry.toml` (upstream: `gastownhall/gascity-packs`)
+// alongside the operator's currently-installed packs. The marketplace
+// is **not** a hardcoded list — it consumes the upstream registry
+// document so any new pack published to the registry shows up in
+// the UI after the next cache TTL elapses, and operators can point
+// the console at their own registry by setting `GC_MARKETPLACE_URL`
+// (or `?registry=<url>` per request).
+//
+// Design notes:
+//   - Registry fetch is cached in-memory for 5 minutes. `gc` may be
+//     offline; the registry fetch must NOT block the UI on a slow
+//     GitHub round-trip. On failure we serve the last-good cache
+//     with a `stale: true` flag so the UI can show "registry
+//     unreachable, showing last-known catalog".
+//   - Installed state is joined server-side. We already have
+//     `gcListPacks` hitting `GET /v0/city/{city}/packs`; the
+//     marketplace endpoint calls it in parallel and merges the
+//     results so the client gets one round-trip with installed
+//     flags already populated.
+//   - The CLI subcommands remain the source of truth for actual
+//     install/uninstall — the marketplace server fns just wrap
+//     `gc import add/remove` with the right args.
+
+const DEFAULT_MARKETPLACE_URL =
+  'https://raw.githubusercontent.com/gastownhall/gascity-packs/main/registry.toml'
+const MARKETPLACE_CACHE_TTL_MS = 5 * 60 * 1000
+const MARKETPLACE_FETCH_TIMEOUT_MS = 8_000
+
+interface RegistryCacheEntry {
+  fetchedAt: number
+  toml: string
+  error?: string
+}
+
+const registryCache = new Map<string, RegistryCacheEntry>()
+
+/**
+ * Fetch a registry.toml URL, with a small in-memory cache keyed by
+ * URL. The function returns the raw TOML text — parsing is left to
+ * the caller so we can memoize parse errors independently and so a
+ * parse failure on one URL doesn't poison other cached URLs.
+ */
+async function fetchRegistryToml(url: string): Promise<{
+  toml: string
+  fetchedAt: number
+  stale: boolean
+  error?: string
+}> {
+  const now = Date.now()
+  const cached = registryCache.get(url)
+  if (cached && now - cached.fetchedAt < MARKETPLACE_CACHE_TTL_MS) {
+    return { toml: cached.toml, fetchedAt: cached.fetchedAt, stale: false, error: cached.error }
+  }
+  try {
+    const res = await fetch(url, {
+      headers: { accept: 'application/toml, text/plain;q=0.9, */*;q=0.5' },
+      signal: AbortSignal.timeout(MARKETPLACE_FETCH_TIMEOUT_MS),
+    })
+    if (!res.ok) {
+      const msg = `registry fetch failed: HTTP ${res.status}`
+      // Stale-on-error: keep serving the last good copy if we have
+      // one, so a transient outage doesn't blank the marketplace.
+      if (cached) {
+        registryCache.set(url, { ...cached, error: msg })
+        return { toml: cached.toml, fetchedAt: cached.fetchedAt, stale: true, error: msg }
+      }
+      registryCache.set(url, { fetchedAt: now, toml: '', error: msg })
+      return { toml: '', fetchedAt: now, stale: false, error: msg }
+    }
+    const text = await res.text()
+    registryCache.set(url, { fetchedAt: now, toml: text })
+    return { toml: text, fetchedAt: now, stale: false }
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err)
+    if (cached) {
+      registryCache.set(url, { ...cached, error: msg })
+      return { toml: cached.toml, fetchedAt: cached.fetchedAt, stale: true, error: msg }
+    }
+    registryCache.set(url, { fetchedAt: now, toml: '', error: msg })
+    return { toml: '', fetchedAt: now, stale: false, error: msg }
+  }
+}
+
+/**
+ * Marketplace entry shape — what the UI consumes. One row per pack
+ * declared in a registry, with the operator's installed state
+ * merged in. `registryName` carries which configured registry the
+ * entry came from so the UI can group / filter / badge it.
+ */
+export interface MarketplaceEntry {
+  name: string
+  description?: string
+  source: string
+  sourceKind?: string
+  tag: string
+  tier?: number
+  latestVersion?: string
+  latestCommit?: string
+  latestRef?: string
+  readmeUrl: string
+  installed: boolean
+  installedRef?: string
+  installedSource?: string
+  registryName: string
+}
+
+/**
+ * Compute the GitHub README URL for a pack entry, preferring the
+ * `tree/<ref>/<path>` form when we have a ref so the link points at
+ * the actually-installed (or latest-released) revision rather than
+ * the moving HEAD of `main`.
+ */
+function readmeUrlFor(source: string, ref: string | undefined, name: string): string {
+  // Only attempt to rewrite `github.com/...` URLs. Other registries
+  // (self-hosted, GitLab, etc.) pass through verbatim and we leave
+  // it to the operator to know where to read.
+  const ghMatch = source.match(/^https?:\/\/github\.com\/([^/]+)\/([^/]+)(\/(.+))?$/)
+  if (!ghMatch) return source
+  const owner = ghMatch[1]
+  const repo = ghMatch[2].replace(/\.git$/, '')
+  const subpath = ghMatch[4] ?? name
+  // If the source is already in `tree/<ref>/<path>` form, prefer
+  // that exact ref; otherwise use the provided ref or `main`.
+  const treeMatch = subpath.match(/^tree\/([^/]+)\/(.+)$/)
+  const branch = treeMatch?.[1] ?? ref ?? 'main'
+  const path = treeMatch?.[2] ?? subpath
+  return `https://github.com/${owner}/${repo}/tree/${branch}/${path}`
+}
+
+export interface MarketplaceListing {
+  registries: Array<{
+    name: string
+    source: string
+    stale: boolean
+    error?: string
+    fetchedAt: string
+  }>
+  entries: MarketplaceEntry[]
+}
+
+/**
+ * Fetch the merged marketplace catalog from every configured pack
+ * registry. The `gc` CLI owns the registry list (`gc pack registry
+ * list`); when none is configured (e.g. headless dev before `gc
+ * init`), we fall back to the upstream default so the UI still has
+ * something to show. The optional `registry` param restricts the
+ * result to a single registry name — the UI uses it for the
+ * registry filter chips.
+ */
+export const gcListMarketplaceEntries = createServerFn({ method: 'GET' })
+  .validator(
+    z
+      .object({
+        registry: z.string().optional(),
+        cwd: z.string().optional(),
+      })
+      .optional(),
+  )
+  .handler(async ({ data }) => {
+    // Pull the configured-registry list, but fall back gracefully
+    // when `gc` isn't bootstrapped (no city dir) or returns an
+    // empty list. The upstream-default URL is the silent fallback
+    // so the Marketplace is never empty.
+    let configured: RegistrySummary[] = []
+    let configuredError: string | undefined
+    try {
+      const r = await runGc(['pack', 'registry', 'list', '--json'], {
+        timeoutMs: 15_000,
+        cwd: data?.cwd,
+      })
+      if (r.ok) {
+        configured = parseRegistryList(r.stdout)
+      } else if (!/no such file|city/i.test(r.stderr)) {
+        configuredError = (r.stderr || r.stdout).trim().slice(0, 400)
+      }
+    } catch (err) {
+      configuredError = err instanceof Error ? err.message : String(err)
+    }
+
+    const registries = configured.length > 0
+      ? configured
+      : [{ name: 'upstream', source: DEFAULT_MARKETPLACE_URL }]
+
+    const wantRegistry = data?.registry?.trim() || ''
+    const filteredRegistries = wantRegistry
+      ? registries.filter((r) => r.name === wantRegistry)
+      : registries
+
+    const { parseRegistryToml, latestRelease, inferPackTag, inferPackTier } =
+      await import('./registry-toml')
+
+    // Fetch every registry's TOML in parallel — the cache + per-URL
+    // stale-on-error handling means a slow registry can't block the
+    // others.
+    const fetched = await Promise.all(
+      filteredRegistries.map((r) => fetchRegistryToml(r.source).then((f) => ({ r, f }))),
+    )
+
+    // Index installed packs by both name AND normalised source URL.
+    // We need both keys because an operator may have installed a
+    // pack under a different binding name (e.g. `gc import add
+    // https://…/bmad --name my-bmad`). Without the source key,
+    // the catalog entry for `bmad` would falsely show "available"
+    // even though it's already installed — clicking install would
+    // then either no-op or create a duplicate binding.
+    const installedByName = new Map<
+      string,
+      { name: string; source?: string; path?: string; ref?: string }
+    >()
+    const installedBySource = new Map<
+      string,
+      { name: string; source?: string; path?: string; ref?: string }
+    >()
+    const normSource = (s: string | undefined): string | undefined => {
+      if (!s) return undefined
+      return s
+        .replace(/\.git(\/|$)/g, '$1')
+        .replace(/\/+$/, '')
+        .toLowerCase()
+    }
+    try {
+      const installed = await gcListPacks()
+      for (const p of installed ?? []) {
+        installedByName.set(p.name, p)
+        const key = normSource(p.source ?? p.path)
+        if (key) installedBySource.set(key, p)
+      }
+    } catch {
+      /* degraded mode — leave maps empty */
+    }
+
+    const entries: MarketplaceEntry[] = []
+    const registryMeta: MarketplaceListing['registries'] = []
+    for (const { r, f } of fetched) {
+      registryMeta.push({
+        name: r.name,
+        source: r.source,
+        stale: f.stale,
+        error: f.error,
+        fetchedAt: new Date(f.fetchedAt).toISOString(),
+      })
+      if (!f.toml) continue
+      let doc
+      try {
+        doc = parseRegistryToml(f.toml)
+      } catch (err) {
+        registryMeta[registryMeta.length - 1] = {
+          ...registryMeta[registryMeta.length - 1]!,
+          error: err instanceof Error ? err.message : String(err),
+        }
+        continue
+      }
+      for (const pack of doc.packs) {
+        const rel = latestRelease(pack)
+        // Match on name OR normalised source. Name is the common
+        // case; source catches the "renamed binding" scenario.
+        const installed =
+          installedByName.get(pack.name) ??
+          installedBySource.get(normSource(pack.source) ?? '')
+        entries.push({
+          name: pack.name,
+          description: pack.description,
+          source: pack.source,
+          sourceKind: pack.sourceKind,
+          tag: inferPackTag(pack),
+          tier: inferPackTier(pack),
+          latestVersion: rel?.version,
+          latestCommit: rel?.commit,
+          latestRef: rel?.ref,
+          readmeUrl: readmeUrlFor(pack.source, rel?.ref, pack.name),
+          installed: Boolean(installed),
+          installedRef: installed?.ref,
+          installedSource: installed?.source ?? installed?.path,
+          registryName: r.name,
+        })
+      }
+    }
+
+    return {
+      registries: registryMeta,
+      entries,
+      // Keep these top-level fields for clients that read them:
+      ...(configuredError ? { error: configuredError } : {}),
+    } as MarketplaceListing & { error?: string }
+  })
+
+/**
+ * Compute update status for every installed pack by joining against
+ * the marketplace catalog. Pure server fn — no shelling out — so
+ * the UI can poll this cheaply on the Installed tab.
+ */
+export const gcCheckPackUpdates = createServerFn({ method: 'GET' })
+  .validator(z.object({ cwd: z.string().optional() }).optional())
+  .handler(async ({ data }) => {
+    let installed: Array<{ name: string; ref?: string; path?: string; source?: string }> = []
+    try {
+      installed = await gcListPacks()
+    } catch {
+      /* supervisor offline — empty */
+    }
+    // Pull catalog from the same code path so we never drift.
+    const catalog = await gcListMarketplaceEntries({ data: { cwd: data?.cwd } })
+    const updates = computePackUpdates(installed, catalog.entries)
+    const availableCount = updates.filter((u) => u.status === 'update_available').length
+    return { updates, availableCount }
+  })
+
+/**
+ * Install a marketplace pack. Wraps `gc import add <source>
+ * [--version <constraint>]` and on success invalidates the cached
+ * installed-pack list so the next marketplace fetch sees it.
+ *
+ * `version` is optional — pass a semver constraint (`^0.1.6`) or a
+ * `sha:<commit>` pin from the registry to lock to a specific
+ * release. When omitted, `gc` resolves to the latest published
+ * release per the registry's hash manifest.
+ */
+export const gcInstallMarketplaceEntry = createServerFn({ method: 'POST' })
+  .validator(
+    z.object({
+      name: z.string().min(1),
+      source: z.string().min(1),
+      version: z.string().optional(),
+      cwd: z.string().optional(),
+    }),
+  )
+  .handler(async ({ data }) => {
+    if (!PACK_NAME_RE.test(data.name)) {
+      return {
+        ok: false as const,
+        output: `invalid pack name "${data.name}"`,
+        error: 'pack names may only contain letters, digits, dot, underscore, dash, and slash',
+      }
+    }
+    const args = ['import', 'add', data.source, '--name', data.name]
+    if (data.version && data.version.trim().length > 0) {
+      args.push('--version', data.version.trim())
+    }
+    try {
+      const r = await runGc(args, { timeoutMs: 90_000, cwd: data.cwd })
+      if (r.ok) {
+        const message = r.stdout.trim() || r.stderr.trim() ||
+          `pack "${data.name}" installed from ${data.source}`
+        return {
+          ok: true as const,
+          output: message,
+          error: undefined as string | undefined,
+        }
+      }
+      return { ok: false as const, ...classifyGcFailure(r, 'gc import add') }
+    } catch (err) {
+      return {
+        ok: false as const,
+        output: 'gc import add threw unexpectedly',
+        error: err instanceof Error ? err.message : String(err),
+      }
+    }
+  })
+
+// Registries (pack sources)
+//
+// `gc pack registry add/list/remove/refresh <name> <source>` is the
+// canonical way to manage the upstream catalogs the console shows in
+// the Marketplace. The console wraps these CLI subcommands so the
+// operator can wire up custom registries (internal mirror, GitLab,
+// vendored copy) without leaving the UI. `gc` already auto-adds the
+// upstream `gastownhall/gascity-packs` registry on first city init;
+// the console's role here is just to surface that list.
+
+const REGISTRY_NAME_RE = /^[a-zA-Z0-9][a-zA-Z0-9._-]{0,63}$/
+
+export interface RegistrySummary {
+  name: string
+  source: string
+  packCount?: number
+  reachable?: boolean
+  error?: string
+}
+
+/**
+ * Parse `gc pack registry list --json` output. The CLI returns a
+ * single JSON object whose `registries` field is the configured
+ * list. We accept the field as either an array of `{name, source,
+ * pack_count?}` or — defensively — a flat array — so a future CLI
+ * reshape doesn't silently empty the list.
+ */
+function parseRegistryList(text: string): RegistrySummary[] {
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(text)
+  } catch {
+    return []
+  }
+  const obj = parsed as {
+    ok?: unknown
+    registries?: unknown
+  }
+  if (obj && typeof obj === 'object' && obj.ok === false) {
+    return []
+  }
+  const arr = Array.isArray(obj?.registries) ? obj.registries : []
+  const out: RegistrySummary[] = []
+  for (const raw of arr) {
+    if (!raw || typeof raw !== 'object') continue
+    const r = raw as { name?: unknown; source?: unknown; pack_count?: unknown }
+    if (typeof r.name !== 'string' || r.name.length === 0) continue
+    if (typeof r.source !== 'string' || r.source.length === 0) continue
+    out.push({
+      name: r.name,
+      source: r.source,
+      packCount: typeof r.pack_count === 'number' ? r.pack_count : undefined,
+    })
+  }
+  return out
+}
+
+export const gcListRegistries = createServerFn({ method: 'GET' })
+  .validator(z.object({ cwd: z.string().optional() }).optional())
+  .handler(async ({ data }) => {
+    try {
+      const r = await runGc(['pack', 'registry', 'list', '--json'], {
+        timeoutMs: 15_000,
+        cwd: data?.cwd,
+      })
+      if (r.ok) {
+        return { ok: true as const, registries: parseRegistryList(r.stdout) }
+      }
+      // Fallback: surface the gc CLI failure as a structured empty
+      // list. `classifyGcFailure` covers ENOENT, "city not configured",
+      // and any other stderr pattern uniformly.
+      return {
+        ok: false as const,
+        registries: [] as RegistrySummary[],
+        ...classifyGcFailure(r, 'gc pack registry list'),
+      }
+    } catch (err) {
+      return {
+        ok: false as const,
+        registries: [] as RegistrySummary[],
+        error: err instanceof Error ? err.message : String(err),
+      }
+    }
+  })
+
+export const gcAddRegistry = createServerFn({ method: 'POST' })
+  .validator(
+    z.object({
+      name: z.string().min(1),
+      source: z.string().min(1),
+      cwd: z.string().optional(),
+    }),
+  )
+  .handler(async ({ data }) => {
+    if (!REGISTRY_NAME_RE.test(data.name)) {
+      return {
+        ok: false as const,
+        output: `invalid registry name "${data.name}"`,
+        error:
+          'registry names: letters, digits, dot, underscore, dash; must start alphanumeric',
+      }
+    }
+    if (!/^https?:\/\/\S+$/.test(data.source)) {
+      return {
+        ok: false as const,
+        output: 'registry source must be an http(s) URL',
+        error: 'registry source must be an http(s) URL',
+      }
+    }
+    try {
+      const r = await runGc(
+        ['pack', 'registry', 'add', data.name, data.source, '--json'],
+        { timeoutMs: 30_000, cwd: data.cwd },
+      )
+      if (r.ok) {
+        return {
+          ok: true as const,
+          output:
+            summariseRegistryCommand('add', r.stdout) ??
+            r.stdout.trim() ??
+            `registry "${data.name}" added`,
+          error: undefined as string | undefined,
+        }
+      }
+      return { ok: false as const, ...classifyGcFailure(r, 'gc pack registry add') }
+    } catch (err) {
+      return {
+        ok: false as const,
+        output: 'gc pack registry add threw unexpectedly',
+        error: err instanceof Error ? err.message : String(err),
+      }
+    }
+  })
+
+export const gcRemoveRegistry = createServerFn({ method: 'POST' })
+  .validator(z.object({ name: z.string().min(1), cwd: z.string().optional() }))
+  .handler(async ({ data }) => {
+    if (!REGISTRY_NAME_RE.test(data.name)) {
+      return {
+        ok: false as const,
+        output: `invalid registry name "${data.name}"`,
+        error: 'invalid registry name',
+      }
+    }
+    try {
+      const r = await runGc(['pack', 'registry', 'remove', data.name, '--json'], {
+        timeoutMs: 15_000,
+        cwd: data.cwd,
+      })
+      if (r.ok) {
+        return {
+          ok: true as const,
+          output:
+            summariseRegistryCommand('remove', r.stdout) ??
+            r.stdout.trim() ??
+            `registry "${data.name}" removed`,
+          error: undefined as string | undefined,
+        }
+      }
+      return { ok: false as const, ...classifyGcFailure(r, 'gc pack registry remove') }
+    } catch (err) {
+      return {
+        ok: false as const,
+        output: 'gc pack registry remove threw unexpectedly',
+        error: err instanceof Error ? err.message : String(err),
+      }
+    }
+  })
+
+/**
+ * Force-refresh a single registry (or all, when `name` is omitted).
+ * Wraps `gc pack registry refresh [name] --json`. The CLI returns
+ * `{ refreshed: [{ name, pack_count }], failures: [] }`.
+ */
+export const gcRefreshRegistries = createServerFn({ method: 'POST' })
+  .validator(
+    z.object({ name: z.string().optional(), cwd: z.string().optional() }),
+  )
+  .handler(async ({ data }) => {
+    if (data?.name && !REGISTRY_NAME_RE.test(data.name)) {
+      return {
+        ok: false as const,
+        output: `invalid registry name "${data.name}"`,
+        error: 'invalid registry name',
+      }
+    }
+    const args = ['pack', 'registry', 'refresh', '--json']
+    if (data?.name) args.push(data.name)
+    try {
+      const r = await runGc(args, { timeoutMs: 60_000, cwd: data?.cwd })
+      if (r.ok) {
+        return {
+          ok: true as const,
+          output:
+            summariseRegistryCommand('refresh', r.stdout) ??
+            r.stdout.trim() ??
+            'registries refreshed',
+          error: undefined as string | undefined,
+        }
+      }
+      return { ok: false as const, ...classifyGcFailure(r, 'gc pack registry refresh') }
+    } catch (err) {
+      return {
+        ok: false as const,
+        output: 'gc pack registry refresh threw unexpectedly',
+        error: err instanceof Error ? err.message : String(err),
+      }
+    }
+  })
+
+// Pack updates
+//
+// `gc import upgrade <name>` upgrades a single installed pack within
+// the constraints declared in `pack.toml` / `packs.lock`. Without a
+// name, it upgrades everything in one pass. We expose both shapes
+// plus a pure-JS `gcCheckPackUpdates` that joins the installed-pack
+// list with the marketplace catalog so the UI can render an
+// "update available" chip without round-tripping to `gc` per pack.
+
+export const gcUpdatePack = createServerFn({ method: 'POST' })
+  .validator(
+    z.object({
+      name: z.string().min(1),
+      cwd: z.string().optional(),
+    }),
+  )
+  .handler(async ({ data }) => {
+    if (!PACK_NAME_RE.test(data.name)) {
+      return {
+        ok: false as const,
+        output: `invalid pack name "${data.name}"`,
+        error: 'pack names may only contain letters, digits, dot, underscore, dash, and slash',
+      }
+    }
+    try {
+      const r = await runGc(['import', 'upgrade', data.name], {
+        timeoutMs: 90_000,
+        cwd: data.cwd,
+      })
+      if (r.ok) {
+        const message = r.stdout.trim() || r.stderr.trim() ||
+          `pack "${data.name}" upgraded`
+        return {
+          ok: true as const,
+          output: message,
+          error: undefined as string | undefined,
+        }
+      }
+      return { ok: false as const, ...classifyGcFailure(r, 'gc import upgrade') }
+    } catch (err) {
+      return {
+        ok: false as const,
+        output: 'gc import upgrade threw unexpectedly',
+        error: err instanceof Error ? err.message : String(err),
+      }
+    }
+  })
+
+export const gcUpdateAllPacks = createServerFn({ method: 'POST' })
+  .validator(z.object({ cwd: z.string().optional() }).optional())
+  .handler(async ({ data }) => {
+    try {
+      const r = await runGc(['import', 'upgrade'], {
+        timeoutMs: 180_000,
+        cwd: data?.cwd,
+      })
+      if (r.ok) {
+        const message = r.stdout.trim() || r.stderr.trim() || 'all packs upgraded'
+        return {
+          ok: true as const,
+          output: message,
+          error: undefined as string | undefined,
+        }
+      }
+      return { ok: false as const, ...classifyGcFailure(r, 'gc import upgrade') }
+    } catch (err) {
+      return {
+        ok: false as const,
+        output: 'gc import upgrade threw unexpectedly',
+        error: err instanceof Error ? err.message : String(err),
+      }
+    }
+  })
+
+/**
+ * Pure join: for each installed pack, find the marketplace entry
+ * (by name) and decide whether an update is available. Pure JS so
+ * it can be unit-tested without the supervisor.
+ *
+ * Status values:
+ *   - `up_to_date`: installed pack matches a marketplace entry by
+ *     name AND no newer release is known. When the installed ref
+ *     equals the catalog's latest commit, we declare
+ *     `up_to_date` confidently. Otherwise (e.g. installed ref is
+ *     a branch name and the catalog only knows commits) we fall
+ *     back to "no newer release published" — still up to date as
+ *     far as we can tell from the catalog.
+ *   - `update_available`: catalog has a release newer than what
+ *     the operator has installed. Determined by either (a) the
+ *     installed ref differs from the catalog's latest commit/ref,
+ *     or (b) the installed source URL doesn't match the catalog
+ *     entry's source URL (i.e. operator installed from a fork).
+ *   - `not_in_catalog`: installed pack name has no marketplace
+ *     entry (free-form install from a URL we don't track).
+ *
+ * The supervisor's `PackResponse` only carries `name/path/ref/source`
+ * (see `client/openapi.json`). We deliberately do NOT parse `ref` as
+ * a version — it can be a branch, a tag, or a commit SHA depending
+ * on what `gc` pinned in `packs.lock`. The most reliable signal we
+ * have without parsing `packs.lock` on the server is the commit hash.
+ */
+export type PackUpdateStatus =
+  | 'up_to_date'
+  | 'update_available'
+  | 'not_in_catalog'
+
+export interface PackUpdateInfo {
+  name: string
+  status: PackUpdateStatus
+  installedRef?: string
+  installedSource?: string
+  latestVersion?: string
+  latestRef?: string
+  registryName?: string
+}
+
+function refsEqual(a: string | undefined, b: string | undefined): boolean {
+  if (!a || !b) return false
+  return a === b
+}
+
+function sourcesEqual(a: string | undefined, b: string | undefined): boolean {
+  if (!a || !b) return false
+  // Trim `.git` (anywhere in the path) and trailing slashes so
+  // `…/foo.git//sub` matches `…/foo//sub`. `.git` can appear
+  // either at the end of the repo segment OR inline before the
+  // `//subpath` separator — `gc import add` accepts both.
+  const norm = (s: string) =>
+    s
+      .replace(/\.git(\/|$)/g, '$1')
+      .replace(/\/+$/, '')
+      .toLowerCase()
+  return norm(a) === norm(b)
+}
+
+export function computePackUpdates(
+  installed: Array<{
+    name: string
+    ref?: string
+    path?: string
+    source?: string
+  }>,
+  catalog: MarketplaceEntry[],
+): PackUpdateInfo[] {
+  const catalogByName = new Map<string, MarketplaceEntry>()
+  const catalogBySource = new Map<string, MarketplaceEntry>()
+  const normSourceKey = (s: string | undefined): string | undefined => {
+    if (!s) return undefined
+    return s
+      .replace(/\.git(\/|$)/g, '$1')
+      .replace(/\/+$/, '')
+      .toLowerCase()
+  }
+  for (const e of catalog) {
+    catalogByName.set(e.name, e)
+    const k = normSourceKey(e.source)
+    if (k) catalogBySource.set(k, e)
+  }
+  return installed.map((p) => {
+    // Match on name first (most common), then on normalised source
+    // (catches the "renamed binding" case: operator installed
+    // `https://…/bmad` under `--name my-bmad`).
+    const entry =
+      catalogByName.get(p.name) ??
+      catalogBySource.get(normSourceKey(p.source ?? p.path) ?? '')
+    if (!entry) {
+      return {
+        name: p.name,
+        status: 'not_in_catalog' as PackUpdateStatus,
+        installedRef: p.ref,
+        installedSource: p.source ?? p.path,
+      }
+    }
+    // Two ways to be up to date:
+    //   (a) installed ref matches the catalog's latest ref exactly,
+    //   (b) the installed source matches the catalog's source AND
+    //       the catalog has no newer release to point at.
+    const refMatches = refsEqual(p.ref, entry.latestRef)
+    const sourceMatches = sourcesEqual(p.source, entry.source)
+    const status: PackUpdateStatus =
+      refMatches || (sourceMatches && !entry.latestRef && !entry.latestVersion)
+        ? 'up_to_date'
+        : 'update_available'
+    return {
+      name: p.name,
+      status,
+      installedRef: p.ref,
+      installedSource: p.source ?? p.path,
+      latestVersion: entry.latestVersion,
+      latestRef: entry.latestRef,
+      registryName: entry.registryName,
+    }
+  })
+}
 
 // Orders
 

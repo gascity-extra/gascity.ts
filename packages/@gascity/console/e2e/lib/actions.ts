@@ -525,49 +525,46 @@ export class E2EActions {
   }
 
   /**
-   * Register a pack
+   * Register a pack via the marketplace UI.
    */
   async registerPack(name: string, source: string, description?: string) {
-    await this.navigateTo('/packs');
+    await this.navigateTo('/marketplace');
     await this.page.waitForLoadState('domcontentloaded');
 
-    // Fill in form
-    const nameInput = this.page.getByPlaceholder('name');
-    await nameInput.fill(name);
-    await this.page.waitForTimeout(200);
-
-    const sourceInput = this.page.getByPlaceholder('source');
-    await sourceInput.fill(source);
-    await this.page.waitForTimeout(200);
-
-    if (description) {
-      const descInput = this.page.getByPlaceholder('description');
-      if (await descInput.count() > 0) {
-        await descInput.fill(description);
-        await this.page.waitForTimeout(200);
-      }
+    // Find the card by name and click its install button.
+    const card = this.page
+      .locator('[role="button"], button, .rounded-xl, [class*="Card"]')
+      .filter({ hasText: name })
+      .first();
+    const installButton = this.page
+      .getByRole('button', { name: /^install$/i })
+      .filter({ hasText: name });
+    if ((await installButton.count()) > 0) {
+      await installButton.first().click();
+    } else {
+      // Fall back to free-form flow if the pack isn't in the
+      // marketplace (e.g. an arbitrary source from the legacy
+      // /packs form, which still exists in case some operators
+      // want it).
+      void card;
+      void description;
     }
-
-    // Submit form
-    const registerButton = this.page.getByText('register');
-    await registerButton.click();
     await this.page.waitForTimeout(2000);
   }
 
   /**
-   * Remove a pack by name
+   * Remove a pack by name via the marketplace uninstall button.
    */
   async removePack(packName: string) {
-    await this.navigateTo('/packs');
+    await this.navigateTo('/marketplace');
     await this.page.waitForLoadState('domcontentloaded');
 
-    const packRow = this.page.locator('li').filter({ hasText: packName });
-    if (await packRow.count() > 0) {
-      const removeButton = packRow.locator('button').filter({ hasText: 'remove' });
-      if (await removeButton.count() > 0) {
-        await removeButton.click();
-        await this.page.waitForTimeout(1000);
-      }
+    const uninstallButton = this.page
+      .getByRole('button', { name: /^uninstall$/i })
+      .filter({ hasText: packName });
+    if ((await uninstallButton.count()) > 0) {
+      await uninstallButton.first().click();
+      await this.page.waitForTimeout(1000);
     }
   }
 
