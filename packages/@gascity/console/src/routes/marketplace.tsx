@@ -408,6 +408,8 @@ function MarketplacePage() {
             updateOnePending={updateOneMut.isPending}
             updateOneVars={updateOneMut.variables}
             updateAllPending={updateAllMut.isPending}
+            uninstallPending={uninstallMut.isPending}
+            uninstallVars={uninstallMut.variables}
             availableCount={updateAvailableCount}
             onUninstall={(name) => uninstallMut.mutate(name)}
             onUpdate={(name) => updateOneMut.mutate(name)}
@@ -457,7 +459,9 @@ function MarketplacePage() {
             <Button
               size="sm"
               disabled={
-                !newRegistryName || !newRegistrySource || addRegistryMut.isPending
+                !newRegistryName.trim() ||
+                !newRegistrySource.trim() ||
+                addRegistryMut.isPending
               }
               onClick={() =>
                 addRegistryMut.mutate({
@@ -814,6 +818,8 @@ function InstalledView({
   updateOnePending,
   updateOneVars,
   updateAllPending,
+  uninstallPending,
+  uninstallVars,
   availableCount,
   onUninstall,
   onUpdate,
@@ -824,6 +830,8 @@ function InstalledView({
   updateOnePending: boolean
   updateOneVars: unknown
   updateAllPending: boolean
+  uninstallPending: boolean
+  uninstallVars: unknown
   availableCount: number
   onUninstall: (name: string) => void
   onUpdate: (name: string) => void
@@ -848,7 +856,10 @@ function InstalledView({
               updateOnePending &&
               (updateOneVars as { name?: string } | undefined)?.name === info.name
             }
-            isUninstallPending={false}
+            isUninstallPending={
+              uninstallPending &&
+              (uninstallVars as { name?: string } | undefined)?.name === info.name
+            }
             onUpdate={() => onUpdate(info.name)}
             onUninstall={() => onUninstall(info.name)}
           />
@@ -875,6 +886,7 @@ function InstalledView({
 function InstalledCard({
   info,
   isUpdatePending,
+  isUninstallPending,
   onUpdate,
   onUninstall,
 }: {
@@ -929,7 +941,8 @@ function InstalledCard({
           variant="outline"
           size="icon"
           onClick={onUninstall}
-          className="h-6 w-6 shrink-0"
+          disabled={isUninstallPending}
+          className="h-6 w-6 shrink-0 disabled:opacity-50"
           title="uninstall this pack"
           aria-label="uninstall this pack"
         >

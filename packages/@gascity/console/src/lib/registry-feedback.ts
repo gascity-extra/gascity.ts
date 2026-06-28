@@ -86,6 +86,7 @@ function summariseRefresh(obj: JsonObject, raw: string): string | null {
  *   → 'registry "internal" added'
  */
 function summariseAdd(obj: JsonObject, raw: string): string | null {
+  if (obj.ok === false) return null
   const name = asString(obj.name)
   if (!name) return null
   const cached = obj.cached === true
@@ -102,6 +103,7 @@ function summariseAdd(obj: JsonObject, raw: string): string | null {
  *   → 'registry "internal" removed'
  */
 function summariseRemove(obj: JsonObject, raw: string): string | null {
+  if (obj.ok === false) return null
   const name = asString(obj.name)
   if (!name) return null
   if (obj.removed === false) return `registry "${name}" not removed`
