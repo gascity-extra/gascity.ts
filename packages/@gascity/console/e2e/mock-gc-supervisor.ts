@@ -383,6 +383,35 @@ const server = createServer(async (req, res) => {
         const tail = state.events.slice(-limit)
         return json(res, 200, { events: tail })
     }
+    // City sessions list — drives the sessions table on the home page.
+    // Mock returns an empty list unless the city is running, mirroring
+    // the real `gc` behaviour where sessions only exist for an active
+    // city. Tests that need non-empty data override the city state via
+    // `POST /v0/city` (which sets a deterministic session count).
+    const sessionsMatch = route.match(/^GET \/v0\/city\/([^/]+)\/sessions$/)
+    if (sessionsMatch) {
+        if (!state.supervisorUp) {
+            return json(res, 503, { detail: 'mock-gc supervisor is down' })
+        }
+        const name = decodeURIComponent(sessionsMatch[1])
+        if (name !== state.city.name) {
+            return json(res, 404, { detail: `city "${name}" not registered` })
+        }
+        if (state.city.phase !== 'running') {
+            return json(res, 200, { items: [] })
+        }
+        const items = Array.from({ length: state.city.sessions.total }).map(
+            (_, i) => ({
+                name: `mock-session-${i + 1}`,
+                agent: 'mock-agent',
+                provider: 'mock',
+                status: i < state.city.sessions.running ? 'running' : 'idle',
+                started_at: state.city.startedAt,
+                last_activity_at: new Date().toISOString(),
+            }),
+        )
+        return json(res, 200, { items })
+    }
 
     // Fall-through: everything else is unimplemented (e.g. agent / session
     // / sling / mail endpoints the test doesn't drive). Return 404 rather
@@ -405,13 +434,27 @@ async function writeGcShim(): Promise<string> {
     const script = `#!/usr/bin/env bash
 set -euo pipefail
 PORT="\${MOCK_GC_PORT:-${PORT}}"
+# Map CLI subcommands to the supervisor endpoints above. The
+# console's server functions spawn either the bare form
+# (\`gc start\`) for legacy operator convenience or the explicit
+# \`gc supervisor start\` form (the upstream-canonical shape we use
+# now). Handle both.
 case "\${1:-}" in
-  start)    curl -fsS -X POST "http://127.0.0.1:\${PORT}/v0/supervisor/start"     >/dev/null; echo "gc supervisor started"; exit 0 ;;
-  stop)     curl -fsS -X POST "http://127.0.0.1:\${PORT}/v0/supervisor/stop"      >/dev/null; echo "gc supervisor stopped"; exit 0 ;;
-  restart)  curl -fsS -X POST "http://127.0.0.1:\${PORT}/v0/supervisor/restart"   >/dev/null; echo "gc supervisor restarted"; exit 0 ;;
-  status)   curl -fsS "http://127.0.0.1:\${PORT}/health" || echo "down"; exit 0 ;;
-  version)  echo "${SUPERVISOR_VERSION}" ;;
-  *)        echo "mock-gc: unknown subcommand \$1" >&2; exit 2 ;;
+  start)         curl -fsS -X POST "http://127.0.0.1:\${PORT}/v0/supervisor/start"     >/dev/null; echo "gc supervisor started"; exit 0 ;;
+  stop)          curl -fsS -X POST "http://127.0.0.1:\${PORT}/v0/supervisor/stop"      >/dev/null; echo "gc supervisor stopped"; exit 0 ;;
+  restart)       curl -fsS -X POST "http://127.0.0.1:\${PORT}/v0/supervisor/restart"   >/dev/null; echo "gc supervisor restarted"; exit 0 ;;
+  supervisor)
+    case "\${2:-}" in
+      start)    curl -fsS -X POST "http://127.0.0.1:\${PORT}/v0/supervisor/start"     >/dev/null; echo "gc supervisor started"; exit 0 ;;
+      stop)     curl -fsS -X POST "http://127.0.0.1:\${PORT}/v0/supervisor/stop"      >/dev/null; echo "gc supervisor stopped"; exit 0 ;;
+      restart)  curl -fsS -X POST "http://127.0.0.1:\${PORT}/v0/supervisor/restart"   >/dev/null; echo "gc supervisor restarted"; exit 0 ;;
+      status)   curl -fsS "http://127.0.0.1:\${PORT}/health" || echo "down"; exit 0 ;;
+      *)        echo "mock-gc: unknown subcommand supervisor \$2" >&2; exit 2 ;;
+    esac
+    ;;
+  status)        curl -fsS "http://127.0.0.1:\${PORT}/health" || echo "down"; exit 0 ;;
+  version)       echo "${SUPERVISOR_VERSION}" ;;
+  *)             echo "mock-gc: unknown subcommand \$1" >&2; exit 2 ;;
 esac
 `
     writeFileSync(binPath, script, { mode: 0o755 })

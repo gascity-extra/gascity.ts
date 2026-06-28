@@ -183,8 +183,16 @@ function InitCityDialog({
         },
       });
     },
-    onSuccess: (r) => onDone(r.output),
-  });
+    onSuccess: (r) => {
+      // Surface the server-fn's `error` field alongside `output` so the
+      // action console can distinguish "init failed because X" from
+      // the bare `gc init threw unexpectedly` summary. The server fn
+      // also runs `POST /v0/city` (init + register + start) — see
+      // `gcCityInitWithPacks` for the wiring.
+      const detail = r.error ? `\n  (${r.error})` : ''
+      onDone(`${r.output}${detail}`)
+    },
+  })
 
   function toggle(name: string) {
     setSelected((s) => {

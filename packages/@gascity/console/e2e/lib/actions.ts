@@ -88,10 +88,15 @@ export class E2EActions {
   constructor(private page: Page) { }
 
   /**
-   * Navigate to a page by path
+   * Navigate to a page by path. The default Playwright page.goto
+   * timeout is 15s, but a cold dev server can take 20-30s to
+   * serve the first page in this devcontainer, so we widen
+   * the navigation timeout to match `actionTimeout` (10s) plus
+   * a comfortable margin for TanStack Start SSR + initial JS
+   * hydration requests.
    */
   async navigateTo(path: string) {
-    await this.page.goto(`${baseURL()}${path}`);
+    await this.page.goto(`${baseURL()}${path}`, { timeout: 60_000 });
     await this.page.waitForLoadState('domcontentloaded');
     await waitForHydration(this.page);
   }
@@ -139,18 +144,25 @@ export class E2EActions {
    * Open sling drawer
    */
   async openSlingDrawer() {
-    // Try clicking the button first (more reliable than keyboard shortcut)
-    const slingButton = this.page.getByText('sling task');
-    const count = await slingButton.count();
+    // Wait for the sidebar's "+ sling task" button to attach. Hydration
+    // can take 5-10s on a cold dev server, and the button isn't
+    // interactive until React has mounted the listener.
+    const slingButton = this.page.getByRole('button', {
+      name: /\+\s*sling task/,
+    });
+    await expect(slingButton.first()).toBeEnabled({ timeout: 30_000 });
+    await slingButton.first().click();
 
-    if (count > 0) {
-      await slingButton.click();
-    } else {
-      // Fallback to keyboard shortcut
-      await this.page.keyboard.press('n');
-    }
-
-    await this.page.waitForTimeout(3000);
+    // Wait for the drawer's city <select> to appear (it renders as a
+    // pair of dropdowns: city + agent). The drawer isn't a real
+    // `<dialog>` element — it's a positioned div — so role=dialog
+    // would fail to match.
+    await expect(this.page.locator('select').first()).toBeVisible({
+      timeout: 15_000,
+    });
+    // Give the drawer's initial queries (gcListCities + gcListAgents)
+    // a moment to settle so the city dropdown has real options.
+    await this.page.waitForTimeout(2000);
   }
 
   /**
@@ -575,8 +587,10 @@ export class E2EActions {
     await this.navigateTo('/cities');
     await this.page.waitForLoadState('domcontentloaded');
 
-    // Open create city dialog
-    const newCityButton = this.page.getByText('+ new city');
+    // Open create city dialog. Use `getByRole` so we don't collide with
+    // the visible-but-not-clickable `<span>` label that mirrors the
+    // button text inside the row.
+    const newCityButton = this.page.getByRole('button', { name: '+ new city' });
     await newCityButton.click();
     await this.page.waitForTimeout(1000);
 
@@ -605,6 +619,43 @@ export class E2EActions {
       // Button not found or disabled, close dialog
       await this.page.keyboard.press('Escape');
       await this.page.waitForTimeout(500);
+    }
+  }
+
+  /**
+   * Init a city via the dialog AND register/start it with the supervisor
+   * in one go. `gc init` runs in the dialog; the follow-up `gcCityStart`
+   * server fn with the absolute path reuses the bootstrapped directory
+   * and lets the supervisor pick it up (per upstream
+   * `internal/api/huma_handlers_supervisor.go:108-118`).
+   *
+   * The dialog's "gc init + import" button leaves the city in an
+   * "init'd but not registered" state — there is no UI flow that wires
+   * the two together, so this action does it manually for the e2e rig.
+   *
+   * Routes the registration through the console's own `gcCityStart`
+   * server fn rather than `fetch('/gc/v0/city', ...)`: the Vite proxy
+   * in dev resolves `/gc/*` to the catch-all route file
+   * (`src/routes/gc.$.ts`), and that handler returns the proxy
+   * response — but the request body envelope and CSRF header need to
+   * match what the supervisor expects. Using the server fn keeps the
+   * call on the server side where `GC_API_BASE_URL` and the CSRF
+   * generation are correctly wired by the OpenAPI client.
+   */
+  async initAndStartCity(path: string, packNames: string[] = []) {
+    await this.createCity(path, packNames);
+    // Click the row's "gc start" button — the console's UI already
+    // wires that button to `gcCityStart({ city })`. We pass the
+    // bootstrapped path via the row's `data-city-path` attribute (the
+    // UI is responsible for surfacing the absolute path of the city
+    // it created).
+    const row = this.page.locator('div, tr, li').filter({ hasText: path }).first();
+    const startBtn = row.getByText('gc start');
+    if ((await startBtn.count()) > 0) {
+      await startBtn.click();
+      await this.page.waitForTimeout(3000);
+    } else {
+      throw new Error(`initAndStartCity: no "gc start" button found for ${path}`);
     }
   }
 
@@ -797,5 +848,59 @@ export class E2EActions {
       }
       return false;
     }, timeout);
+  }
+
+  /**
+   * Wait for a bead with the given id to appear in the closed filter.
+   * Used by the sling → pickup → result spec to confirm the bead was
+   * closed by the rig (or by the `gcCloseBead` stub-fix path).
+   */
+  async waitForBeadClosed(beadId: string, timeout = 30000): Promise<boolean> {
+    return this.waitForCondition(async () => {
+      const beads = await this.getBeadList('closed');
+      for (const b of beads) {
+        const text = await b.textContent();
+        if (text && text.includes(beadId)) return true;
+      }
+      return false;
+    }, timeout);
+  }
+
+  /**
+   * Remove a city directory we created during a scenario. Best-effort:
+   * logs but does not throw on `fs.rm` failure so a leftover from a
+   * prior failed run never blocks the next run's cleanup logic.
+   */
+  async cleanupCity(path: string): Promise<void> {
+    const { rm } = await import('node:fs/promises');
+    try {
+      await rm(path, { recursive: true, force: true });
+    } catch (e) {
+      console.log(`cleanupCity(${path}) failed: ${e}`);
+    }
+  }
+
+  /**
+   * Hit the supervisor's `/v0/cities` directly. Uses
+   * `playwright.request` (`page.request`) so the call bypasses the
+   * console's `/gc/*` proxy (which is a dev-only Vite middleware
+   * and returns 404 against paths the catch-all route file
+   * `src/routes/gc.$.ts` doesn't handle in body-forward form) and
+   * talks straight to the supervisor at `GC_API_BASE_URL`.
+   *
+   * Used by the sling-pickup spec to confirm the dialog's
+   * `gc init + import` actually registered the city with the
+   * supervisor — the UI's `cities` list is cached behind a 5s
+   * `refetchInterval`, so polling the API directly is the
+   * source-of-truth check.
+   */
+  async getV0Cities(): Promise<Array<{ name: string; path: string; active?: boolean }>> {
+    const base = process.env.GC_API_BASE_URL || 'http://127.0.0.1:8372'
+    const res = await this.page.request.get(`${base}/v0/cities`, {
+      headers: { Accept: 'application/json' },
+    })
+    if (!res.ok()) throw new Error(`/v0/cities returned ${res.status()}`)
+    const body = (await res.json()) as { items?: Array<{ name: string; path: string; active?: boolean }> }
+    return body.items ?? []
   }
 }

@@ -54,7 +54,11 @@ export default defineConfig({
         command: `./e2e/with-mock-gc.sh`,
         url: BASE_URL,
         reuseExistingServer: false,
-        timeout: 60_000,
+        // Mock webServer boots faster than the real devcontainer one
+        // (no Dolt / no supervisor reconcile), but Vite still cold-loads
+        // gc.functions.ts ~10-15s on first compile. Bump to 90s to
+        // avoid flakes on slow CI.
+        timeout: 90_000,
         stdout: "pipe",
         stderr: "pipe",
     },

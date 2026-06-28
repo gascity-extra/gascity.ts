@@ -155,12 +155,13 @@ describe('resolveSupervisorUrl', () => {
         expect(out.url).toBe('https://env.example.com')
     })
 
-    it('falls back to upstream default port (9443) when nothing is configured', () => {
-        // Upstream `gc` Go CLI defaults to port 9443 in supervisor.toml
-        // (PortOrDefault), not 8372. We mirror that default.
+    it('falls back to upstream default port (8372) when nothing is configured', () => {
+        // Upstream `gc` Go CLI defaults to port 8372 in supervisor.toml
+        // (see `internal/supervisor/config.go: PortOrDefault`). We mirror
+        // that default — earlier code here pinned 9443 incorrectly.
         const out = _resolveSupervisorUrlForTest()
         expect(out.source).toBe('default')
-        expect(out.url).toBe('http://127.0.0.1:9443')
+        expect(out.url).toBe('http://127.0.0.1:8372')
     })
 
     it('strips trailing slash from override', () => {

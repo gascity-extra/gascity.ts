@@ -15,6 +15,8 @@ import { DefaultService, configureGasCityClient } from '@gascity/client'
 import { silentIfOffline, isCityNotConfigured, CITY_NOT_CONFIGURED_HINT } from './gc-errors'
 import { derivePackName, PACK_NAME_RE } from './packs-catalog'
 import { summariseRegistryCommand } from './registry-feedback'
+import * as nodePath from 'node:path'
+import * as path from 'node:path'
 
 // Configure the OpenAPI-generated client once at module load. Without this,
 // `DefaultService.*` calls hit `axios` with an empty `BASE`, which throws
@@ -471,7 +473,7 @@ function fmtEventForConsole(e: {
   return `${ts} ${e.type}${who}${subj}${payload}`.trim()
 }
 
-async function startCityImpl(cityName: string): Promise<{
+async function startCityImpl(cityName: string, dir?: string): Promise<{
   output: string
   ok: boolean
   requestId?: string
@@ -479,7 +481,15 @@ async function startCityImpl(cityName: string): Promise<{
 }> {
   try {
     const csrf = `console-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`
-    const accepted = await DefaultService.postV0City(csrf, { dir: '.' })
+    // `POST /v0/city` is the upstream-canonical "create + register + start"
+    // endpoint (`internal/api/huma_handlers_supervisor.go:108-118`). It
+    // accepts an absolute city path in `dir` and resolves relative paths
+    // against the SUPERVISOR's $HOME — not the console's cwd — so we
+    // must pass an absolute path here, not `'.'`. The UI passes the
+    // path from the dialog so the supervisor scaffolds (or re-attaches
+    // to) the same directory the console just `gc init`-ed.
+    const cityDir = dir ? path.resolve(dir) : undefined
+    const accepted = await DefaultService.postV0City(csrf, { dir: cityDir ?? '.' })
     const acceptedOk = unwrap(accepted as Envelope<{ event_cursor?: string; request_id?: string }>)
     if (!acceptedOk) {
       return {
@@ -588,9 +598,16 @@ async function stopCityImpl(cityName: string): Promise<{
 }
 
 export const gcCityStart = createServerFn({ method: 'POST' })
-  .validator(z.object({ city: z.string().min(1).default('default').optional() }).optional())
+  .validator(
+    z
+      .object({
+        city: z.string().min(1).default('default').optional(),
+        dir: z.string().optional(),
+      })
+      .optional(),
+  )
   .handler(async ({ data }) => {
-    return await startCityImpl(data?.city ?? CITY)
+    return await startCityImpl(data?.city ?? CITY, data?.dir)
   })
 
 export const gcCityStop = createServerFn({ method: 'POST' })
@@ -825,11 +842,12 @@ export function _resolveCityDirForTest(override?: string): string {
 
 // --- Supervisor URL resolution -------------------------------------------------
 //
-// The supervisor's HTTP API can live anywhere — `127.0.0.1:9443` for a
-// local dev box (upstream default), `https://gc.prod.example.com` for a
-// hosted deployment, or `http://10.0.0.5:9001` for a sidecar. We honour
-// a stack of overrides that mirrors what the upstream `gc` CLI does
-// for its own `--api` flag plus auto-discovery from `supervisor.toml`:
+// The supervisor's HTTP API can live anywhere — `127.0.0.1:8372` for a
+// local dev box (upstream default per `internal/supervisor/config.go:
+// PortOrDefault()`), `https://gc.prod.example.com` for a hosted
+// deployment, or `http://10.0.0.5:9001` for a sidecar. We honour a
+// stack of overrides that mirrors what the upstream `gc` CLI does for
+// its own `--api` flag plus auto-discovery from `supervisor.toml`:
 //
 //   1. Explicit override passed to the call (e.g. operator typed it in
 //      the UI). Per-request, never persisted on the server.
@@ -856,7 +874,7 @@ export function _resolveCityDirForTest(override?: string): string {
 // tests; production code should use the `gcSupervisorDiscover` server
 // function (which adds reachability and source tracking).
 
-const SUPERVISOR_URL_DEFAULT = 'http://127.0.0.1:9443'
+const SUPERVISOR_URL_DEFAULT = 'http://127.0.0.1:8372'
 const SUPERVISOR_URL_RE = /^https?:\/\/[^\s]+$/
 
 function defaultSupervisorHome(): string {
@@ -1038,6 +1056,89 @@ export function _buildSupervisorUrlFromTomlForTest(
   return buildSupervisorUrlFromToml(bind, port)
 }
 
+// --- Sling output parsing -----------------------------------------------------
+//
+// `gc sling --json <agent> "<text>"` emits a JSON envelope on stdout.
+// The exact envelope shape isn't documented, so we accept a few common
+// shapes by key: top-level `bead_id`, `bead.id`, `beads[0].id`, or
+// dispatch result `result.bead_id`. When `--json` isn't available (older
+// `gc` builds) we fall back to regex extraction of `gd-…` / `bd-…` ids
+// from stdout. The parser is exposed for unit tests.
+
+interface SlingParseResult {
+  output: string
+  bead_id?: string
+}
+
+function parseSlingOutput(stdout: string, stderr: string): SlingParseResult {
+  const trimmed = stdout.trim()
+  // Try JSON first — `--json` is the stable machine format.
+  if (trimmed.length > 0 && (trimmed.startsWith('{') || trimmed.startsWith('['))) {
+    try {
+      const obj = JSON.parse(trimmed)
+      const id =
+        (typeof obj?.bead_id === 'string' && obj.bead_id) ||
+        (typeof obj?.bead?.id === 'string' && obj.bead.id) ||
+        (typeof obj?.result?.bead_id === 'string' && obj.result.bead_id) ||
+        (Array.isArray(obj?.beads) &&
+          typeof obj.beads[0]?.id === 'string' &&
+          obj.beads[0].id) ||
+        undefined
+      if (id) {
+        return { output: `slung bead ${id}`, bead_id: id }
+      }
+      // JSON parsed but no known id field — fall through to regex.
+    } catch {
+      // Not valid JSON — fall through to regex.
+    }
+  }
+  // Regex fallback. Priority order: explicit "Created" / "Slung" /
+  // "Started workflow" / "Attached wisp" markers first (bead id is the
+  // next whitespace-delimited token). Upstream `gc sling` uses
+  // per-rig-configured bead-id prefixes (e.g. `BL-42`, `FE-1`,
+  // `agent-diagnostics`) rather than a fixed `gd-` / `bd-` prefix —
+  // see `gastownhall/gascity` `internal/sling/sling.go:BeadPrefixForCity`.
+  // The generic fallback below matches the documented upstream shape
+  // `<prefix>-<3..8 alphanumeric>` and tolerates any prefix.
+  const patterns = [
+    /^\s*Created\s+(\S+)/m,
+    /^\s*Slung\s+(\S+)/m,
+    /^\s*Started workflow\s+(\S+)/m,
+    /^\s*Attached wisp\s+(\S+)/m,
+    /\b(gd-[a-z0-9]+)\b/i,
+    /\b(bd-[a-z0-9]+)\b/i,
+  ]
+  for (const re of patterns) {
+    const m = stdout.match(re) || stderr.match(re)
+    if (m && m[1]) {
+      return { output: `slung bead ${m[1]}`, bead_id: m[1] }
+    }
+  }
+  return { output: trimmed || stderr.trim() || 'gc sling dispatched (no bead id reported)' }
+}
+
+export function _parseSlingOutputForTest(stdout: string, stderr: string): SlingParseResult {
+  return parseSlingOutput(stdout, stderr)
+}
+
+// Bead-id allow-list. Upstream `gc` uses per-rig-configured prefixes
+// (e.g. `BL-42`, `FE-1`, `agent-diagnostics`); the shape is
+// `<prefix>-<alnum suffix>` where the prefix is one or more
+// identifier-safe chunks and the suffix is 3-8 alnum chars. We accept
+// any `[A-Za-z0-9][A-Za-z0-9_.-]*-\d+[A-Za-z0-9]*` to cover both the
+// legacy `gd-…` / `bd-…` style and the per-rig-prefix style.
+// Exposed for unit tests; production code in `gcCloseBead` uses the
+// same regex inline so the handler stays readable.
+const BEAD_ID_RE = /^[A-Za-z0-9][A-Za-z0-9_./-]*-[A-Za-z0-9]+$/
+
+export function _isValidBeadIdForTest(id: string): boolean {
+  return BEAD_ID_RE.test(id)
+}
+
+export function _isValidAgentNameForTest(name: string): boolean {
+  return /^[a-zA-Z0-9._/-]+$/.test(name)
+}
+
 /**
  * Temporarily reconfigure the global OpenAPI client to point at the
  * given supervisor URL, run `fn`, then restore the previous BASE.
@@ -1108,7 +1209,7 @@ function resolveCityDir(override?: string): string {
       : (process.env.GC_CITY_DIR && process.env.GC_CITY_DIR.trim().length > 0
         ? process.env.GC_CITY_DIR
         : process.cwd())
-  const path = require('node:path') as typeof import('node:path')
+  const path = nodePath
   const resolved = path.resolve(raw)
   // Allow-list: must live under one of the roots. Default to HOME if set,
   // else `/workspaces` (typical dev container layout), else the resolved
@@ -1233,7 +1334,7 @@ async function resolveCityDirAsync(override?: string): Promise<string> {
  */
 async function runGc(
   args: string[],
-  opts: { timeoutMs?: number; cwd?: string } = {},
+  opts: { timeoutMs?: number; cwd?: string; skipCity?: boolean } = {},
 ): Promise<{ ok: boolean; stdout: string; stderr: string; code: number }> {
   const { spawn } = await import('node:child_process')
   const bin = safeGcBin()
@@ -1249,8 +1350,15 @@ async function runGc(
   // "could not find city or pack root" error for operators whose
   // supervisor already has a city registered — the console no
   // longer needs to live inside that city directory.
+  //
+  // Pass `skipCity: true` for commands that operate at the daemon
+  // level (`gc supervisor start|stop|restart`) — those don't need a
+  // city context, and forcing one through `--city` would make the
+  // bootstrap path fail when no city is registered yet.
   let cityDir: string | undefined
-  if (opts.cwd && opts.cwd.trim().length > 0) {
+  if (opts.skipCity) {
+    cityDir = undefined
+  } else if (opts.cwd && opts.cwd.trim().length > 0) {
     cityDir = resolveCityDir(opts.cwd)
   } else {
     const discovered = await discoverCityDir()
@@ -1266,6 +1374,17 @@ async function runGc(
         PATH: process.env.PATH ?? '/usr/local/bin:/usr/bin:/bin',
         HOME: process.env.HOME ?? '/tmp',
         LANG: process.env.LANG ?? 'C.UTF-8',
+        // Forward `GC_*` env vars from the console process — `gc`
+        // reads several of these (`GC_DOLT_SKIP`, `GC_HOME`,
+        // `GC_NO_API`, ...) at startup. The minimal env above is
+        // tight enough to avoid leaking secrets (no `GC_API_TOKEN`,
+        // no AWS / GCP credentials) but still pass through the GC
+        // namespace that the operator explicitly configured.
+        ...Object.fromEntries(
+          Object.entries(process.env).filter(
+            ([k]) => k === 'GC_DOLT_SKIP' || k === 'GC_HOME' || k === 'GC_NO_API' || k === 'GC_SUPERVISOR_LOG_TEE',
+          ),
+        ),
       },
     })
     const stdout: Buffer[] = []
@@ -1378,7 +1497,7 @@ async function startSupervisorImpl(opts: { cwd?: string } = {}): Promise<{
   // other tooling can discover it). Using `gc supervisor start`
   // avoids the confusing "not in a city directory" error that `gc
   // start` produces when run from a non-city cwd.
-  const result = await runGc(['supervisor', 'start'], { timeoutMs: 30_000, cwd: opts.cwd })
+  const result = await runGc(['supervisor', 'start'], { timeoutMs: 30_000, cwd: opts.cwd, skipCity: true })
   if (result.ok) {
     return {
       output: 'gc supervisor started',
@@ -1416,7 +1535,7 @@ async function stopSupervisorImpl(opts: { cwd?: string } = {}): Promise<{
   ok: boolean
   error?: string
 }> {
-  const result = await runGc(['supervisor', 'stop'], { timeoutMs: 30_000, cwd: opts.cwd })
+  const result = await runGc(['supervisor', 'stop'], { timeoutMs: 30_000, cwd: opts.cwd, skipCity: true })
   if (result.ok) {
     return {
       output: 'gc supervisor stopped',
@@ -1499,7 +1618,18 @@ async function initCityImpl(path: string): Promise<{
       error: err instanceof Error ? err.message : String(err),
     }
   }
-  const result = await runGc(['init', resolved], { timeoutMs: 30_000, cwd: resolved })
+  const result = await runGc(
+    [
+      'init',
+      '--template',
+      'minimal',
+      '--default-provider',
+      'claude',
+      '--skip-provider-readiness',
+      resolved,
+    ],
+    { timeoutMs: 30_000, cwd: resolved },
+  )
   if (result.ok) {
     return {
       output: `initialized city at ${resolved}`,
@@ -1809,11 +1939,48 @@ export const gcSessionReset = createServerFn({ method: 'POST' })
 export const gcSling = createServerFn({ method: 'POST' })
   .validator(z.object({ agent: z.string(), text: z.string().min(1) }))
   .handler(async ({ data }) => {
-    return {
-      output: `Sling task to ${data.agent} executed`,
-      ok: true as const,
-      bead_id: undefined as string | undefined,
-      error: undefined as string | undefined,
+    // Allow-list the agent name to keep argv injection-safe: `gc` accepts
+    // the same chars as the rest of the file (bead-id / rig-name chars).
+    if (!/^[a-zA-Z0-9._/-]+$/.test(data.agent)) {
+      return {
+        output: `sling rejected: invalid agent "${data.agent}"`,
+        ok: false as const,
+        bead_id: undefined as string | undefined,
+        error: `invalid agent name (allowed: [a-zA-Z0-9._/-])`,
+      }
+    }
+    try {
+      // `--json` makes `gc sling` emit a stable machine-readable result
+      // envelope on stdout (see `gc sling --help` — "Output dispatch
+      // result in JSON format"). The parser tolerates non-JSON output by
+      // falling back to regex extraction of `gd-…` / `bd-…` ids from
+      // stdout, so older `gc` versions still work.
+      const result = await runGc(['sling', '--json', data.agent, data.text], {
+        timeoutMs: REQUEST_TIMEOUT_MS,
+      })
+      const parsed = parseSlingOutput(result.stdout, result.stderr)
+      if (!result.ok) {
+        const detail = (result.stderr || result.stdout).trim().slice(0, 500)
+        return {
+          output: `gc sling failed (exit=${result.code}): ${detail}`,
+          ok: false as const,
+          bead_id: parsed.bead_id,
+          error: detail,
+        }
+      }
+      return {
+        output: parsed.output,
+        ok: true as const,
+        bead_id: parsed.bead_id,
+        error: undefined as string | undefined,
+      }
+    } catch (error) {
+      return {
+        output: 'gc sling threw unexpectedly',
+        ok: false as const,
+        bead_id: undefined as string | undefined,
+        error: error instanceof Error ? error.message : String(error),
+      }
     }
   })
 
@@ -1847,7 +2014,44 @@ export const gcListBeads = createServerFn({ method: 'GET' })
 export const gcCloseBead = createServerFn({ method: 'POST' })
   .validator(z.object({ id: z.string() }))
   .handler(async ({ data }) => {
-    return { output: `Bead ${data.id} closed`, ok: true, error: undefined as string | undefined }
+    // Bead ids use per-rig-configured prefixes (e.g. `gd-xxx`,
+    // `BL-42`, `FE-1`) per upstream `gc` convention — see the
+    // `BEAD_ID_RE` regex above. Reject anything that doesn't match
+    // before shelling out — `bd close` accepts free strings and we
+    // don't want argv injection.
+    if (!BEAD_ID_RE.test(data.id)) {
+      return {
+        output: `close rejected: invalid bead id "${data.id}"`,
+        ok: false,
+        error: `invalid bead id (expected <prefix>-<suffix>)`,
+      }
+    }
+    try {
+      // `gc bd close <id>` shells out to the underlying `bd close`
+      // command in the active city's rig context. There's no HTTP
+      // endpoint for closing a bead on the supervisor API, so this
+      // is the canonical path.
+      const result = await runGc(['bd', 'close', data.id], { timeoutMs: 15_000 })
+      if (!result.ok) {
+        const detail = (result.stderr || result.stdout).trim().slice(0, 500)
+        return {
+          output: `gc bd close failed (exit=${result.code}): ${detail}`,
+          ok: false,
+          error: detail,
+        }
+      }
+      return {
+        output: `Bead ${data.id} closed`,
+        ok: true,
+        error: undefined as string | undefined,
+      }
+    } catch (error) {
+      return {
+        output: 'gc bd close threw unexpectedly',
+        ok: false,
+        error: error instanceof Error ? error.message : String(error),
+      }
+    }
   })
 
 // Packs
@@ -1855,24 +2059,88 @@ export const gcCloseBead = createServerFn({ method: 'POST' })
 export const gcCityInitWithPacks = createServerFn({ method: 'POST' })
   .validator(z.object({ path: z.string(), packs: z.array(z.object({ name: z.string(), source: z.string().optional() })) }))
   .handler(async ({ data }) => {
-    // Delegate to the real `gc init` implementation. The packs list is
-    // accepted for API compatibility with the existing `/cities` dialog
-    // — once the CLI gains a `--with-pack` flag we'll forward them.
-    try {
-      const result = await initCityImpl(data.path)
-      const suffix = data.packs.length > 0 ? ` (with ${data.packs.length} pack(s) requested)` : ''
-      return {
-        output: result.ok ? `${result.output}${suffix}` : result.output,
-        ok: result.ok,
-        error: result.error,
-      }
-    } catch (error) {
-      return {
-        output: 'gc init threw unexpectedly',
-        ok: false,
-        error: error instanceof Error ? error.message : String(error),
+    // Two-phase bootstrap: `gc init` writes the on-disk shape, then
+    // `POST /v0/city` (via `startCityImpl`) scaffolds + registers + starts
+    // it under the supervisor. The upstream API has no "register-only"
+    // path — registering is a side effect of `POST /v0/city`
+    // (`internal/api/huma_handlers_supervisor.go:108-118`), and that
+    // endpoint ALSO scaffolds. Since `gc init` already wrote the
+    // scaffold, the second call hits the handler's pre-check
+    // (`cityDirAlreadyInitialized` at line 463 of the same file) and
+    // returns 409 — which we surface as a non-fatal "already registered"
+    // message so the caller can proceed.
+    //
+    // The `dir` is forwarded as an absolute path because the supervisor
+    // resolves relative `dir` values against its OWN `$HOME`, not the
+    // console's cwd — passing `'.'` or any relative path would silently
+    // scaffold a spurious city under `~/`.
+  try {
+    const initResult = await initCityImpl(data.path)
+    const initSuffix = data.packs.length > 0 ? ` (with ${data.packs.length} pack(s) requested)` : ''
+    const initOutput = initResult.ok ? `${initResult.output}${initSuffix}` : initResult.output
+
+    // Phase 1b: copy the rig config in (if `GC_RIG_DIR` is set) so the
+    // city has agents to sling to. This is the e2e-rig path — see
+    // `e2e/rig/README.md`. Operators who don't set `GC_RIG_DIR` skip
+    // this step and get a vanilla minimal-template city.
+    let rigOutput = ''
+    if (process.env.GC_RIG_DIR && initResult.ok) {
+      const { cp, mkdir, rm } = await import('node:fs/promises')
+      try {
+        // City layout is `agents/<name>/agent.toml + prompt.template.md`.
+        // The rig dir already mirrors that layout (`e2e/rig/agents/...`).
+        const cityAgentsDir = nodePath.join(data.path, 'agents')
+        await mkdir(cityAgentsDir, { recursive: true })
+        const rigAgentsDir = nodePath.join(process.env.GC_RIG_DIR, 'agents')
+        const entries = await import('node:fs/promises').then((m) => m.readdir(rigAgentsDir, { withFileTypes: true }))
+        for (const ent of entries) {
+          if (!ent.isDirectory()) continue
+          const srcDir = nodePath.join(rigAgentsDir, ent.name)
+          const dstDir = nodePath.join(cityAgentsDir, ent.name)
+          await rm(dstDir, { recursive: true, force: true })
+          await cp(srcDir, dstDir, { recursive: true })
+        }
+        rigOutput = `\nrig config installed from ${process.env.GC_RIG_DIR}`
+      } catch (e) {
+        rigOutput = `\nrig install failed: ${e instanceof Error ? e.message : String(e)}`
       }
     }
+
+    // Phase 2: register + start the city with the supervisor.
+    //
+    // The upstream API's `POST /v0/city` 409s when the target dir is
+    // already bootstrapped (`cityDirAlreadyInitialized` pre-check at
+    // `internal/api/huma_handlers_supervisor.go:463`), so calling it
+    // after `gc init` doesn't register the city. We shell out to
+    // `gc start <abs-path>` instead, which talks to the supervisor's
+    // control socket out-of-band and handles "register existing
+    // bootstrapped city" correctly via
+    // `registerCityWithSupervisorNamed` (`cmd/gc/cmd_start.go:423`).
+    const cliResult = await runGc(['start', data.path], {
+      timeoutMs: 30_000,
+      cwd: data.path,
+      skipCity: true,
+    })
+    if (cliResult.ok) {
+      const derivedName = data.path.split(/[/\\]/).filter(Boolean).pop() ?? 'default'
+      return {
+        output: `${initOutput}${rigOutput}\ncity "${derivedName}" registered + started`,
+        ok: initResult.ok,
+        error: initResult.ok ? undefined : initResult.error,
+      }
+    }
+    return {
+      output: `${initOutput}${rigOutput}\ngc start rejected: ${(cliResult.stderr || cliResult.stdout).trim()}`,
+      ok: false,
+      error: (cliResult.stderr || cliResult.stdout).trim().slice(0, 500),
+    }
+  } catch (error) {
+    return {
+      output: 'gc init threw unexpectedly',
+      ok: false,
+      error: error instanceof Error ? error.message : String(error),
+    }
+  }
   })
 
 export const gcListPacks = createServerFn({ method: 'GET' }).handler(async () => {

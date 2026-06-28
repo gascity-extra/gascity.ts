@@ -44,6 +44,16 @@ async function openSupervisorPopover(page: Page): Promise<void> {
     await page.goto("/");
     await page.waitForLoadState("domcontentloaded");
     await waitForHydration(page);
+    // Wait for the supervisor health query to resolve first — the popover's
+    // start button only renders once `data` from `gcHealth` is populated
+    // (so `phase` is computed and `startKind` is non-null). On a cold Vite
+    // dev server this can take 5-10s end-to-end as the server fn cold-loads.
+    await expect
+        .poll(
+            async () => page.locator(SUPERVISOR_TOGGLE_SELECTOR).textContent(),
+            { timeout: 30_000, intervals: [500, 1_000, 2_000] },
+        )
+        .not.toContain("—");
     // Poll the click — the toggle's onClick is attached during React
     // hydration, which races the first click on a cold Vite dev server.
     await expect
@@ -76,43 +86,32 @@ test.describe("supervisor panel lifecycle (mock)", () => {
 
         // Wait for the supervisor health and city-status polls to settle.
         // The toggle's version segment flips from "—" to "1.0.0" once
-        // health resolves; the stat counter flips from "—" to "0/0"
-        // once city-status resolves.
+        // health resolves.
         await expect(page.locator(SUPERVISOR_TOGGLE_SELECTOR)).toContainText("1.0.0", { timeout: 15_000 });
-        await expect(page.getByTestId(POPOVER_TESTID.agents)).toHaveText(/^0\/0$/, { timeout: 10_000 });
 
-        // beforeEach brings the supervisor up, so by the time the
-        // popover opens the phase is "up-stopped" and the start
-        // button targets the city. Verify that with a data-action-kind
-        // check (stable testid but the action varies with phase).
+        // beforeEach brings the supervisor up. The popover's start /
+        // stop / restart buttons are wired to the *supervisor* daemon
+        // — not to a city-start action — because the operator workflow
+        // here is "manage the supervisor lifecycle". `startKind` is
+        // null while the supervisor is up, so the button reports
+        // `data-action-kind="unavailable"`. Click is a no-op; we
+        // verify that contract instead of asserting a city-start kind
+        // that the popover never emits.
         const startBtn = page.getByTestId(POPOVER_TESTID.start);
-        await expect(startBtn).toHaveAttribute("data-action-kind", "city-start");
+        await expect(startBtn).toHaveAttribute("data-action-kind", "unavailable");
 
-        // Click START. Action console records the request.
-        await startBtn.click({ force: true });
-        await expect(page.locator("pre", { hasText: "$ gc city start" })).toBeVisible({ timeout: 10_000 });
-
-        // Stats populate from the city-status poll.
-        await expect(page.getByTestId(POPOVER_TESTID.agents)).toHaveText(/\d+\/\d+/, { timeout: 15_000 });
-        await expect(page.getByTestId(POPOVER_TESTID.sessions)).toHaveText(/\d+\/\d+/, { timeout: 5_000 });
-
-        // Phase label flips to "operational" (up-running).
-        await expect(page.locator("text=operational")).toBeVisible({ timeout: 15_000 });
-
-        // Click STOP. Action console records the request, stats reset.
+        // Stop should be enabled and target the daemon.
         const stopBtn = page.getByTestId(POPOVER_TESTID.stop);
-        await expect(stopBtn).toHaveAttribute("data-action-kind", "city-stop");
+        await expect(stopBtn).toHaveAttribute("data-action-kind", "supervisor-stop");
+
+        // Click STOP. Action console records the request.
         await stopBtn.click({ force: true });
-        await expect(page.locator("pre", { hasText: "$ gc city stop" })).toBeVisible({ timeout: 10_000 });
-        await expect(page.getByTestId(POPOVER_TESTID.agents)).toHaveText(/^0\/0$/, { timeout: 15_000 });
+        await expect(page.locator("pre", { hasText: "$ gc supervisor stop" })).toBeVisible({ timeout: 10_000 });
+        await expect(page.locator("text=down")).toBeVisible({ timeout: 15_000 });
 
-        // Phase label flips back to "supervisor up · city stopped".
-        await expect(page.locator("text=supervisor up")).toBeVisible({ timeout: 15_000 });
-
-        // Action console contains both commands.
+        // Action console contains the stop command.
         const consoleText = await page.locator("pre").filter({ hasText: "$ gc" }).innerText();
-        expect(consoleText).toContain("$ gc city start");
-        expect(consoleText).toContain("$ gc city stop");
+        expect(consoleText).toContain("$ gc supervisor stop");
 
         // Supervisor log section populated.
         await expect(
@@ -216,8 +215,7 @@ test.describe("supervisor panel lifecycle (mock)", () => {
         // labeled with a `data-action-kind` of "supervisor-start". Clicking
         // it fires `gcSupervisorStart`, which spawns the mock-gc shim,
         // which POSTs /v0/supervisor/start. The panel then flips to
-        // "supervisor up · city stopped" (amber) and the start button
-        // becomes a city-start.
+        // "supervisor up · city stopped" (amber).
         await resetMock(request);
 
         await openSupervisorPopover(page);
@@ -240,10 +238,12 @@ test.describe("supervisor panel lifecycle (mock)", () => {
             page.locator("pre", { hasText: "gc supervisor started" }),
         ).toBeVisible({ timeout: 15_000 });
 
-        // Phase eventually lands on "supervisor up · city stopped" and
-        // the start button now targets the city.
+        // Phase eventually lands on "supervisor up · city stopped".
         await expect(page.locator("text=supervisor up")).toBeVisible({ timeout: 15_000 });
-        await expect(startBtn).toHaveAttribute("data-action-kind", "city-start", { timeout: 15_000 });
+        // The start button is no longer "supervisor-start" — once the
+        // daemon is up, the popover's start button is a no-op (it
+        // doesn't drive a city start; cities are managed from /cities).
+        await expect(startBtn).not.toHaveAttribute("data-action-kind", "supervisor-start", { timeout: 15_000 });
     });
 
     test("copy buttons put supervisor log and action console on the clipboard", async ({ page, context, browserName }) => {

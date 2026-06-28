@@ -385,6 +385,11 @@ const startMut = useMutation({
       if (!r.ok) {
         appendConsole("! gc supervisor start", `error: ${r.error ?? "unknown"}`);
       }
+      // Clear the optimistic transition so the phase can flip back to
+      // the steady state derived from the health query. Without this,
+      // the popover stays stuck on "starting…" even after the daemon
+      // is up.
+      setTransition(null);
       qc.invalidateQueries({ queryKey: ["gc", "health"] });
     },
     onError: (e: unknown) => {
@@ -405,6 +410,7 @@ const stopMut = useMutation({
       if (!r.ok) {
         appendConsole("! gc supervisor stop", `error: ${r.error ?? "unknown"}`);
       }
+      setTransition(null);
       qc.invalidateQueries({ queryKey: ["gc", "health"] });
     },
     onError: (e: unknown) => {
@@ -423,6 +429,7 @@ const restartMut = useMutation({
     onSuccess: (r) => {
       appendConsole("$ gc supervisor restart", r.output);
       if (!r.ok) appendConsole("! gc supervisor restart", `error: ${r.error ?? "unknown"}`);
+      setTransition(null);
       qc.invalidateQueries({ queryKey: ["gc", "health"] });
     },
     onError: (e: unknown) => {
