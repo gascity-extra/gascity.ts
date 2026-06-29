@@ -158,10 +158,10 @@ function CitiesPage() {
 function InitCityDialog({
   onClose,
   onDone,
-}: {
+}: Readonly<{
   onClose: () => void;
   onDone: (output: string) => void;
-}) {
+}>) {
   const listPacks = useServerFn(gcListPacks);
   const initFn = useServerFn(gcCityInitWithPacks);
 

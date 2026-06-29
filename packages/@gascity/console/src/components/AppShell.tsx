@@ -671,12 +671,12 @@ function CommandPalette({
   onOpenChange,
   onSling,
   onSupervisor,
-}: {
+}: Readonly<{
   open: boolean;
   onOpenChange: (v: boolean) => void;
   onSling: () => void;
   onSupervisor: () => void;
-}) {
+}>) {
   const navigate = useNavigate();
   if (!open) return null;
   const go = (to: string) => {
@@ -726,10 +726,10 @@ function CommandPalette({
 function PaletteItem({
   children,
   onSelect,
-}: {
+}: Readonly<{
   children: ReactNode;
   onSelect: () => void;
-}) {
+}>) {
   return (
     <Command.Item
       onSelect={onSelect}
