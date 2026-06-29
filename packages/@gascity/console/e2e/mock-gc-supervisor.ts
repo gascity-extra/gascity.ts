@@ -478,7 +478,7 @@ case "\${1:-}" in
       stop)     curl -fsS -X POST "http://127.0.0.1:\${PORT}/v0/supervisor/stop"      >/dev/null; echo "gc supervisor stopped"; exit 0 ;;
       restart)  curl -fsS -X POST "http://127.0.0.1:\${PORT}/v0/supervisor/restart"   >/dev/null; echo "gc supervisor restarted"; exit 0 ;;
       status)   curl -fsS "http://127.0.0.1:\${PORT}/health" || echo "down"; exit 0 ;;
-      *)        echo "mock-gc: unknown subcommand supervisor \$2" >&2; exit 2 ;;
+      *)        echo "mock-gc: unknown subcommand supervisor $2" >&2; exit 2 ;;
     esac
     ;;
   status)        curl -fsS "http://127.0.0.1:\${PORT}/health" || echo "down"; exit 0 ;;

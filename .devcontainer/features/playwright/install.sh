@@ -84,10 +84,8 @@ esac
 rm -rf /var/lib/apt/lists/*
 
 # Optional: trigger Playwright browser download now (requires Node + deps).
-if [[ "$INSTALL_METHOD" == "auto" ]]; then
-    if command -v npx >/dev/null 2>&1; then
-        echo "To install browser binaries later: npx playwright install ${BROWSERS}"
-    fi
+if [[ "$INSTALL_METHOD" == "auto" ]] && command -v npx >/dev/null 2>&1; then
+    echo "To install browser binaries later: npx playwright install ${BROWSERS}"
 fi
 
 # Headless display for non-X servers.

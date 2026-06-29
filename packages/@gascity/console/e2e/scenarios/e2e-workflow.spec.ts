@@ -16,6 +16,7 @@ test.describe('Complete E2E Workflow', () => {
 
   test.beforeAll(async () => {
     if (!(await isGcBackendReachable())) {
+      // NOSONAR: Skip when GC supervisor is not available - these are optional e2e workflow tests
       test.skip(true, 'GC supervisor unreachable; scenario tests require a live backend.');
     }
   });
