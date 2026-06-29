@@ -65,7 +65,7 @@ for _ in $(seq 1 50); do
   sleep 0.1
 done
 
-if [ "${ready}" -ne 1 ]; then
+if [[ "${ready}" -ne 1 ]]; then
   echo "[with-mock-gc] mock-gc failed to come up. log follows:" >&2
   cat "${LOG}" >&2 || true
   exit 1
@@ -80,10 +80,10 @@ echo "[with-mock-gc] mock-gc ready; starting vite on :${E2E_PORT} pointed at ${G
 SHIM=""
 for _ in $(seq 1 50); do
   SHIM_CAND="${TMPDIR:-/tmp}/mock-gc-bin/gc"
-  if [ -x "${SHIM_CAND}" ]; then SHIM="${SHIM_CAND}"; break; fi
+  if [[ -x "${SHIM_CAND}" ]]; then SHIM="${SHIM_CAND}"; break; fi
   sleep 0.1
 done
-if [ -z "${SHIM}" ]; then
+if [[ -z "${SHIM}" ]]; then
   echo "[with-mock-gc] mock-gc gc shim never appeared" >&2
   exit 1
 fi

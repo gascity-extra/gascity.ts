@@ -93,7 +93,7 @@ fi
 # Headless display for non-X servers.
 export DISPLAY=:99
 for shell_config in "$HOME/.bashrc" "$HOME/.zshrc"; do
-    if [ -f "$shell_config" ] && ! grep -q 'export DISPLAY=:99' "$shell_config"; then
+    if [[ -f "$shell_config" ]] && ! grep -q 'export DISPLAY=:99' "$shell_config"; then
         echo 'export DISPLAY=:99' >> "$shell_config"
     fi
 done

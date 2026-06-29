@@ -215,7 +215,7 @@ function StatusPill({ status }: { status: string }) {
   );
 }
 
-function UnavailableHint({ reason }: { reason: string | null }) {
+function UnavailableHint({ reason }: { readonly reason: string | null }) {
   return (
     <div className="border-t border-border bg-muted/40 px-6 py-3 font-mono text-[11px] leading-relaxed text-muted-foreground">
       <div className="text-foreground">Terminal bridge unavailable.</div>
