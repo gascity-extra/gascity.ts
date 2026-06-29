@@ -28,7 +28,26 @@ echo "[with-mock-gc] starting mock-gc on :${MOCK_GC_PORT} (log=${LOG})" >&2
 
 ALLOW_GC_MOCK=1 MOCK_GC_PORT="${MOCK_GC_PORT}" bun e2e/mock-gc-supervisor.ts >"${LOG}" 2>&1 &
 MOCK_PID=$!
-trap "kill ${MOCK_PID} 2>/dev/null || true" EXIT
+
+# Defer installing the cleanup trap until *after* we also know Vite's
+# PID, so a single trap reaps both children. Installing the trap
+# before the exec()/launch of Vite would silently drop it across the
+# exec boundary, which is why the script intentionally avoids `exec`
+# here and keeps bash as the parent of both processes.
+VITE_PID=""
+cleanup() {
+    local rc=$?
+    if [[ -n "${VITE_PID}" ]]; then
+        kill "${VITE_PID}" 2>/dev/null || true
+        pkill -P "${VITE_PID}" 2>/dev/null || true
+    fi
+    kill "${MOCK_PID}" 2>/dev/null || true
+    # Best-effort: also reap any grandchildren (Vite spawns workers)
+    # so they don't linger as zombies after the mock's port is freed.
+    pkill -P "${MOCK_PID}" 2>/dev/null || true
+    exit "${rc}"
+}
+trap cleanup EXIT
 
 # Probe /health so Vite doesn't start until the backend is listening.
 # The mock returns 503 when the supervisor is intentionally down, which
@@ -74,4 +93,17 @@ echo "[with-mock-gc] using mock gc shim at ${SHIM}" >&2
 export GC_API_BASE_URL
 export GC_BIN="${SHIM}"
 export PATH="${TMPDIR:-/tmp}/mock-gc-bin:${PATH}"
-exec bun x vite --port "${E2E_PORT}" --strictPort
+# Run Vite in the foreground (no `exec`) so this shell stays alive as
+# the parent of both processes — the cleanup trap above depends on it.
+bun x vite --port "${E2E_PORT}" --strictPort &
+VITE_PID=$!
+# Forward Playwright's SIGTERM/SIGINT to Vite so it shuts down
+# promptly when the wrapper is asked to stop, then wait for it so the
+# EXIT trap fires only after Vite actually exits.
+forward_signal() {
+    if [[ -n "${VITE_PID}" ]]; then
+        kill -TERM "${VITE_PID}" 2>/dev/null || true
+    fi
+}
+trap 'forward_signal; cleanup' INT TERM
+wait "${VITE_PID}"

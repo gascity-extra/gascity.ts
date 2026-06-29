@@ -111,10 +111,10 @@ export function SlingComposer({ onDone }: { onDone?: () => void }) {
         <div className="font-mono text-[11px] text-muted-foreground">
           {slingMut.isPending
             ? "slinging…"
-            : slingMut.data?.error
-              ? <span className="text-destructive">{slingMut.data.error}</span>
+            : slingMut.data?.ok === false
+              ? <span className="text-destructive">{slingMut.data?.error || "sling failed"}</span>
               : slingMut.data?.ok
-                ? <span className="text-foreground">slung. bead {slingMut.data.bead_id ?? "?"}</span>
+                ? <span className="text-foreground">slung. bead {slingMut.data?.bead_id ?? "?"}</span>
                 : <span>⌘↵ submit · esc cancel</span>}
         </div>
         <button

@@ -408,6 +408,8 @@ function MarketplacePage() {
             updateOnePending={updateOneMut.isPending}
             updateOneVars={updateOneMut.variables}
             updateAllPending={updateAllMut.isPending}
+            uninstallPending={uninstallMut.isPending}
+            uninstallVars={uninstallMut.variables}
             availableCount={updateAvailableCount}
             onUninstall={(name) => uninstallMut.mutate(name)}
             onUpdate={(name) => updateOneMut.mutate(name)}
@@ -457,7 +459,9 @@ function MarketplacePage() {
             <Button
               size="sm"
               disabled={
-                !newRegistryName || !newRegistrySource || addRegistryMut.isPending
+                !newRegistryName.trim() ||
+                !newRegistrySource.trim() ||
+                addRegistryMut.isPending
               }
               onClick={() =>
                 addRegistryMut.mutate({
@@ -705,7 +709,7 @@ function BrowseCard({
 }) {
   const tagLabel = TAG_LABELS[entry.tag] ?? entry.tag
   return (
-    <Card className="relative flex h-full min-w-0 flex-col gap-0 overflow-hidden border-border bg-card py-0">
+    <Card data-testid={`pack-card-${entry.name}`} className="relative flex h-full min-w-0 flex-col gap-0 overflow-hidden border-border bg-card py-0">
       {/* Top-right corner cluster: source icon + install/uninstall
           action. Both live outside the clickable body so they
           remain real interactive elements (anchors/buttons, not
@@ -814,20 +818,24 @@ function InstalledView({
   updateOnePending,
   updateOneVars,
   updateAllPending,
+  uninstallPending,
+  uninstallVars,
   availableCount,
   onUninstall,
   onUpdate,
   onUpdateAll,
 }: {
-  installed: PackUpdateInfo[]
-  isLoading: boolean
-  updateOnePending: boolean
-  updateOneVars: unknown
-  updateAllPending: boolean
-  availableCount: number
-  onUninstall: (name: string) => void
-  onUpdate: (name: string) => void
-  onUpdateAll: () => void
+  readonly installed: PackUpdateInfo[]
+  readonly isLoading: boolean
+  readonly updateOnePending: boolean
+  readonly updateOneVars: unknown
+  readonly updateAllPending: boolean
+  readonly uninstallPending: boolean
+  readonly uninstallVars: unknown
+  readonly availableCount: number
+  readonly onUninstall: (name: string) => void
+  readonly onUpdate: (name: string) => void
+  readonly onUpdateAll: () => void
 }) {
   return (
     <div className="flex-1 overflow-y-auto p-6">
@@ -848,7 +856,10 @@ function InstalledView({
               updateOnePending &&
               (updateOneVars as { name?: string } | undefined)?.name === info.name
             }
-            isUninstallPending={false}
+            isUninstallPending={
+              uninstallPending &&
+              uninstallVars === info.name
+            }
             onUpdate={() => onUpdate(info.name)}
             onUninstall={() => onUninstall(info.name)}
           />
@@ -875,14 +886,15 @@ function InstalledView({
 function InstalledCard({
   info,
   isUpdatePending,
+  isUninstallPending,
   onUpdate,
   onUninstall,
 }: {
-  info: PackUpdateInfo
-  isUpdatePending: boolean
-  isUninstallPending: boolean
-  onUpdate: () => void
-  onUninstall: () => void
+  readonly info: PackUpdateInfo
+  readonly isUpdatePending: boolean
+  readonly isUninstallPending: boolean
+  readonly onUpdate: () => void
+  readonly onUninstall: () => void
 }) {
   const statusBadge = (() => {
     if (info.status === "update_available") {
@@ -906,7 +918,7 @@ function InstalledCard({
     )
   })()
   return (
-    <Card className="relative flex h-full min-w-0 flex-col gap-0 overflow-hidden border-border bg-card py-0">
+    <Card data-testid={`installed-card-${info.name}`} className="relative flex h-full min-w-0 flex-col gap-0 overflow-hidden border-border bg-card py-0">
       {/* Top-right corner cluster: action buttons + source icon. */}
       <div className="absolute right-2 top-1.5 z-10 flex shrink-0 items-center gap-1.5">
         {info.status === "update_available" && (
@@ -929,7 +941,8 @@ function InstalledCard({
           variant="outline"
           size="icon"
           onClick={onUninstall}
-          className="h-6 w-6 shrink-0"
+          disabled={isUninstallPending}
+          className="h-6 w-6 shrink-0 disabled:opacity-50"
           title="uninstall this pack"
           aria-label="uninstall this pack"
         >

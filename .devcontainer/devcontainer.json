@@ -9,8 +9,7 @@
       "upgradePackages": true
     },
     "ghcr.io/devcontainers/features/node:2.1.0": {
-      "version": "24",
-      "installGlibc": true
+      "version": "24"
     },
     "./features/bun": {},
     "./features/devin": {

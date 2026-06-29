@@ -8,7 +8,7 @@
     "keywords": ["ai", "kilo", "cli", "homebrew"],
     "options": {},
     "dependsOn": {
-        "./homebrew": {
+        "./features/homebrew": {
             "packages": ["Kilo-Org/tap/kilo"]
         }
     }

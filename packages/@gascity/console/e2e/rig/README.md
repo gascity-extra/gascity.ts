@@ -9,8 +9,8 @@ bead, proving the full UI → `gc sling` → rig → agent → close wire.
 
 | File | Role |
 |---|---|
-| `gascity-e2e-agent.toml` | Rig agent definition (start_command, prompt_template, lifecycle). Header comment explains the invocation shape per upstream `gastownhall/gascity`. |
-| `prompt.template.md` | Agent prompt template loaded into devin's system context. |
+| `agents/devin-test/agent.toml` | Rig agent definition (start_command, prompt_template, lifecycle). Header comment explains the invocation shape per upstream `gastownhall/gascity`. |
+| `agents/devin-test/prompt.template.md` | Agent prompt template loaded into devin's system context. |
 | `README.md` | This file. |
 
 ## Why devin (not kilo)
@@ -38,9 +38,21 @@ only"). To bootstrap manually for a smoke test:
 RUN=myrun
 CITY=/tmp/gc-e2e-$RUN
 mkdir -p "$CITY/agents/devin-test"
-cp e2e/rig/gascity-e2e-agent.toml "$CITY/agents/devin-test/agent.toml"
-cp e2e/rig/prompt.template.md  "$CITY/agents/devin-test/prompt.template.md"
-cp e2e/rig/gascity-e2e-agent.toml "$CITY/city.toml"
+cp e2e/rig/agents/devin-test/agent.toml "$CITY/agents/devin-test/agent.toml"
+cp e2e/rig/agents/devin-test/prompt.template.md "$CITY/agents/devin-test/prompt.template.md"
+
+# Drop a city.toml that re-uses the rig agent as the only listed
+# rig. The rig's header comment explains why `gc init --file` is the
+# right entry point for this harness.
+cat >"$CITY/city.toml" <<EOF
+[workspace]
+name = "gc-e2e"
+
+[[agent]]
+name = "devin-test"
+start_command = '''$(sed -n '/^start_command = /,/'\''$/p' e2e/rig/agents/devin-test/agent.toml)'''
+prompt_template = "//agents/devin-test/prompt.template.md"
+EOF
 
 gc init --file "$CITY/city.toml" --preserve-existing "$CITY"
 gc register "$CITY"        # or `gc start` to auto-register + start

@@ -24,12 +24,12 @@
  *   bun run test:e2e:mock                          # mock supervisor flow
  */
 import { defineConfig, devices } from "@playwright/test";
+import { parsePort } from "./playwright-utils";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const PORT = Number(process.env.E2E_PORT ?? 3000);
-const BASE_URL = process.env.E2E_BASE_URL ?? `http://localhost:${PORT}`;
+const BASE_URL = process.env.E2E_BASE_URL ?? `http://localhost:${parsePort(process.env.E2E_PORT, 3000)}`;
 const SKIP_SCENARIOS = process.env.SKIP_E2E_SCENARIOS === "1";
 const GC_BACKEND = process.env.GC_API_BASE_URL ?? "http://127.0.0.1:8372";
 

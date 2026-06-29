@@ -958,6 +958,10 @@ function buildSupervisorUrlFromToml(
   if (host === '::' || host === '[::]') host = '::1'
   // Strip IPv6 brackets if the user wrote `[::1]` literally.
   if (host.startsWith('[') && host.endsWith(']')) host = host.slice(1, -1)
+  // IPv6 addresses must be wrapped in brackets inside a URL when a port
+  // follows (RFC 3986 §3.2.2). Without brackets the URL parser treats
+  // the first `:` as the port separator and the rest as garbage.
+  if (host.includes(':')) host = `[${host}]`
   return `http://${host}:${port}`
 }
 

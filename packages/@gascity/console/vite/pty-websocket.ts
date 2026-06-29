@@ -145,8 +145,12 @@ export function tmuxWebSocketPlugin(): Plugin {
         active.clear();
         wss.close();
       };
-      httpServer.on("close", closeAll);
-      server.httpServer?.on("close", closeAll);
+      // `httpServer` and `server.httpServer` are typically the same
+      // underlying node:http.Server; registering the cleanup on both
+      // would run it twice on shutdown. Use the explicit `httpServer`
+      // argument if provided, otherwise fall back to Vite's `server.httpServer`.
+      const target = httpServer ?? server.httpServer;
+      if (target) target.on("close", closeAll);
     },
   };
 }

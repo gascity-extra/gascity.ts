@@ -86,13 +86,15 @@ describe('buildSupervisorUrlFromToml', () => {
 
     it('normalises :: to ::1', () => {
         expect(_buildSupervisorUrlFromTomlForTest('::', 9000)).toBe(
-            'http://::1:9000',
+            'http://[::1]:9000',
         )
     })
 
-    it('strips brackets from an IPv6 literal', () => {
+    it('strips brackets from an IPv6 literal and re-wraps for the URL', () => {
+        // The toml may contain `[::1]` (bracketed) or `::1` (unbracketed);
+        // either way we want a well-formed URL with a bracketed host.
         expect(_buildSupervisorUrlFromTomlForTest('[::1]', 9000)).toBe(
-            'http://::1:9000',
+            'http://[::1]:9000',
         )
     })
 

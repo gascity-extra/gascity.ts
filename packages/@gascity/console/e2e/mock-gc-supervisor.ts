@@ -340,6 +340,7 @@ const server = createServer(async (req, res) => {
         state.city.agents = { total: 0, running: 0, idle: 0, suspended: 0, error: 0 }
         state.city.sessions = { total: 0, running: 0, idle: 0 }
         state.city.mail = { total: 0, unread: 0 }
+        state.city.work = { open: 0, closed: 0 }
         return asyncAccepted(req, res, 'city.unregister', { city: name })
     }
     const statusMatch = route.match(/^GET \/v0\/city\/([^/]+)\/status$/)
@@ -427,9 +428,18 @@ const server = createServer(async (req, res) => {
  * path; in production `GC_BIN` defaults to a real `gc` on PATH.
  */
 async function writeGcShim(): Promise<string> {
-    const { writeFileSync, mkdirSync, chmodSync } = await import('node:fs')
-    const dir = `${process.env.TMPDIR ?? '/tmp'}/mock-gc-bin`
-    mkdirSync(dir, { recursive: true })
+    const { writeFileSync, mkdirSync, chmodSync, mkdtempSync } = await import('node:fs')
+    const { join } = await import('node:path')
+    const { tmpdir } = await import('node:os')
+    // Mirror the bash convention `${TMPDIR:-/tmp}` exactly: an empty
+    // TMPDIR string is treated the same as an unset TMPDIR and
+    // resolves to `/tmp`. Using `??` would treat `''` as a real path
+    // prefix, producing `/mock-gc-bin` instead of `/tmp/mock-gc-bin`
+    // and silently desyncing from the wrapper script's path lookup.
+    // Use mkdtemp with os.tmpdir() for secure temporary directory creation
+    const tmpDir = mkdtempSync(join(tmpdir(), 'mock-gc-'))
+    const dir = join(tmpDir, 'mock-gc-bin')
+    mkdirSync(dir, { recursive: true, mode: 0o700 })
     const binPath = `${dir}/gc`
     const script = `#!/usr/bin/env bash
 set -euo pipefail
