@@ -91,7 +91,7 @@ export function parseRegistryToml(text: string): RegistryDocument {
       continue
     }
 
-    const kv = line.match(KV_RE)
+    const kv = KV_RE.exec(line)
     if (!kv) {
       throw new Error(`registry.toml line ${i + 1}: cannot parse line: ${rawLine}`)
     }

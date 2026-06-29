@@ -34,6 +34,9 @@ test.describe('Alternative E2E Workflow', () => {
     const beads = await actions.getBeadList('all');
     console.log(`Existing beads: ${beads.length}`);
 
+    // Assert that we can navigate to beads page
+    expect(page.url()).toContain('/beads');
+
     if (beads.length === 0) {
       console.log('No existing beads - skipping test');
       test.skip();

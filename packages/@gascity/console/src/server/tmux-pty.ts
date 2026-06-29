@@ -183,7 +183,6 @@ export function handleBrowserMessage(pty: IPty, raw: unknown): void {
   }
   if (raw instanceof ArrayBuffer) {
     pty.write(Buffer.from(raw).toString("utf8"));
-    return;
   }
 }
 
