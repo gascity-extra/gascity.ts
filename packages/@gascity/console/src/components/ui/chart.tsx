@@ -184,7 +184,7 @@ const ChartTooltipContent = React.forwardRef<
           className,
         )}
       >
-        {!nestLabel ? tooltipLabel : null}
+        {nestLabel ? tooltipLabel : null}
         <div className="grid gap-1.5">
           {payload
             .filter((item: TooltipItem) => item.type !== "none")

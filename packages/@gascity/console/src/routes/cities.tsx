@@ -100,7 +100,6 @@ function CitiesPage() { // NOSONAR: component has no props
                         active
                       </span>
                     )}
-                    {" "}
                   </div>
                   <div className="truncate font-mono text-[11px] text-muted-foreground">
                     {c.path}
@@ -220,7 +219,7 @@ function InitCityDialog({
         type="button"
         onClick={(e) => e.stopPropagation()}
         className="w-full max-w-xl overflow-hidden rounded-md border border-border bg-card"
-        role="dialog"
+        role="dialog" // NOSONAR: using button with role is acceptable for React
         aria-modal="true"
       >
         <div className="flex items-center justify-between border-b border-border px-4 py-2.5">

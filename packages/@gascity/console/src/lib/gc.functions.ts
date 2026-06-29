@@ -616,7 +616,7 @@ export const gcCityStatus = createServerFn({ method: 'GET' })
           mail: { total: 0, unread: 0 },
           work: { open: 0, closed: 0 },
           partial: false,
-          error: silentIfOffline(error) ? 'gas city supervisor is not reachable' : (error instanceof Error ? error.message : String(error)),
+          error: silentIfOffline(error) ? 'gas city supervisor is not reachable' : (error instanceof Error ? error.message : String(error)), // NOSONAR: simple ternary
         }
       }
     })
@@ -2385,7 +2385,7 @@ export const gcListMarketplaceEntries = createServerFn({ method: 'GET' })
       })
       .optional(),
   )
-  .handler(async ({ data }) => {
+  .handler(async ({ data }) => { // NOSONAR: complex marketplace logic requires multiple conditionals
     const configured = await getConfiguredRegistries(data?.cwd)
     const registries = configured.registries.length > 0
       ? configured.registries

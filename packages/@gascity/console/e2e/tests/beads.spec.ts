@@ -72,12 +72,7 @@ test.describe('Beads Tests', () => {
     const closeButton = page.getByText('close');
     const count = await closeButton.count();
     
-    if (count > 0) {
-      // Close button exists for open beads
-      console.log('Close button found for open beads');
-    } else {
-      // No open beads or no beads at all
-      console.log('No open beads to close');
-    }
+    // Verify close button is visible (if there are open beads)
+    await expect(closeButton).toBeVisible();
   });
 });

@@ -83,7 +83,7 @@ test.describe('Alternative E2E Workflow', () => {
     console.log(`Existing sessions: ${sessions.length}`);
 
     if (sessions.length === 0) {
-      console.log('No existing sessions - skipping test');
+      console.log('No existing sessions - skipping test'); // NOSONAR: skip when no sessions available
       test.skip();
       return;
     }

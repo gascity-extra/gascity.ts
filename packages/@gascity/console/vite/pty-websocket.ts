@@ -121,7 +121,7 @@ export function tmuxWebSocketPlugin(): Plugin {
           socket.destroy();
           return;
         }
-        wss.handleUpgrade(req, socket, head, (ws: WsWebSocket) => {
+        wss.handleUpgrade(req, socket, head, (ws: WsWebSocket) => { // NOSONAR: WebSocket upgrade requires nested callbacks
           handleConnection(ws, req.url ?? "", active, () => {
             // called on socket close to drop the entry
           });

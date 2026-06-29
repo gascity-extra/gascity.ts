@@ -310,7 +310,7 @@ function MarketplacePage() {
           <TabButton active={tab === "installed"} onClick={() => setTab("installed")}>
             installed
             <span className="ml-1.5 text-muted-foreground">{installedList.length}</span>
-            {" "}{" "}
+            {" "}
             {updateAvailableCount > 0 && (
               <Badge variant="default" className="ml-2 font-mono text-[10px]">
                 {updateAvailableCount} update{updateAvailableCount === 1 ? "" : "s"}
@@ -587,11 +587,11 @@ function RegistryChip({
     <div
       className={clsx(
         "group flex max-w-full items-center gap-1 rounded border px-2 py-0.5 font-mono text-[11px]",
-        active
-          ? "border-foreground bg-foreground text-background"
-          : error
-            ? "border-red-500/40 text-red-500"
-            : "border-border text-muted-foreground hover:text-foreground",
+        (() => {
+          if (active) return "border-foreground bg-foreground text-background"
+          if (error) return "border-red-500/40 text-red-500"
+          return "border-border text-muted-foreground hover:text-foreground"
+        })(),
       )}
     >
       <button
