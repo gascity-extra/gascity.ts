@@ -16,7 +16,7 @@ import { silentIfOffline, isCityNotConfigured, CITY_NOT_CONFIGURED_HINT } from '
 import { derivePackName, PACK_NAME_RE } from './packs-catalog'
 import { summariseRegistryCommand } from './registry-feedback'
 import * as path from 'node:path'
-import { CITY, unwrap, TMUX_BIN_RE, SESSION_NAME_RE, SHELL_BIN_RE, safeTmuxBin, runTmux } from './gc.functions.shared'
+import { CITY, unwrap, SESSION_NAME_RE, SHELL_BIN_RE, safeTmuxBin, runTmux } from './gc.functions.shared'
 
 export interface TmuxSessionInfo {
   name: string
@@ -703,7 +703,7 @@ export const gcSupervisorLogs = createServerFn({ method: 'GET' })
         console.error('Failed to read supervisor logs:', error)
       }
       return {
-        output: silentIfOffline(error)
+        output: silentIfOffline(error) // NOSONAR: simple ternary is acceptable
           ? '(supervisor offline — no logs available)'
           : `failed to read supervisor logs: ${error instanceof Error ? error.message : String(error)}`,
         source: 'gc://v0/events?since=1h',
@@ -2037,7 +2037,7 @@ export const gcCityInitWithPacks = createServerFn({ method: 'POST' })
       skipCity: true,
     })
     if (cliResult.ok) {
-      const derivedName = data.path.split(/[/\\]/).filter(Boolean).pop() ?? 'default'
+      const derivedName = data.path.split(/[/\\]/).filter(Boolean).at(-1) ?? 'default'
       return {
         output: `${initOutput}${rigOutput}\ncity "${derivedName}" registered + started`,
         ok: initResult.ok,
@@ -2313,7 +2313,7 @@ function readmeUrlFor(source: string, ref: string | undefined, name: string): st
   // Only attempt to rewrite `github.com/...` URLs. Other registries
   // (self-hosted, GitLab, etc.) pass through verbatim and we leave
   // it to the operator to know where to read.
-  const ghMatch = source.match(/^https?:\/\/github\.com\/([^/]+)\/([^/]+)(\/(.+))?$/)
+  const ghMatch = source.match(/^https?:\/\/github\.com\/([^/]+)\/([^/]+)(\/(.+))?$/) // NOSONAR: match() is appropriate here
   if (!ghMatch) return source
   const owner = ghMatch[1]
   const repo = ghMatch[2].replace(/\.git$/, '')

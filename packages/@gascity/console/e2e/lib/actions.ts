@@ -329,7 +329,7 @@ export class E2EActions {
       };
 
       // Escape the text properly for shell
-      const escapedText = text.replaceAll('"', '\\"');
+      const escapedText = text.replaceAll('"', String.raw`\\"`);
 
       // Don't use --json as it doesn't output JSON in this version
       const cmd = `gc sling ${agent} "${escapedText}"`;
@@ -439,7 +439,7 @@ export class E2EActions {
         await filterButton.click({ timeout: 5000 });
         await this.page.waitForTimeout(500);
       }
-    } catch (e) {
+    } catch (e) { // NOSONAR: filter is optional, ignore errors
       console.log('Filter button not available or not clickable, proceeding without filter');
     }
 

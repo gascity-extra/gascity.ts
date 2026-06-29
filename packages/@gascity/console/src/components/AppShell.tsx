@@ -117,12 +117,12 @@ function Header({
   supervisorOpen,
   onSupervisorToggle,
   onSupervisorClose,
-}: {
+}: Readonly<{
   onPalette: () => void;
   supervisorOpen: boolean;
   onSupervisorToggle: () => void;
   onSupervisorClose: () => void;
-}) {
+}>) {
   const health = useServerFn(gcHealth);
   const version = useServerFn(gcVersion);
   // The Header just reflects the supervisor's reachability — the
@@ -426,7 +426,7 @@ return (
       />
       <div
         className="absolute right-4 top-11 z-50 w-[620px] overflow-hidden rounded-md border border-border bg-card shadow-lg"
-        onClick={(e) => e.stopPropagation()} // NOSONAR: stopPropagation is intentional
+        onClick={(e) => e.stopPropagation()} // NOSONAR: dialog content, Escape handled by parent backdrop
         role="dialog"
         aria-modal="true"
       >

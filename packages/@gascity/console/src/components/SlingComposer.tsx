@@ -109,13 +109,12 @@ export function SlingComposer({ onDone }: Readonly<{ onDone?: () => void }>) {
       />
       <div className="flex items-center justify-between border-t border-border px-4 py-2">
         <div className="font-mono text-[11px] text-muted-foreground">
-          {slingMut.isPending
-            ? "slinging…"
-            : slingMut.data?.ok === false
-              ? <span className="text-destructive">{slingMut.data?.error || "sling failed"}</span>
-              : slingMut.data?.ok
-                ? <span className="text-foreground">slung. bead {slingMut.data?.bead_id ?? "?"}</span>
-                : <span>⌘↵ submit · esc cancel</span>}
+          {(() => {
+            if (slingMut.isPending) return "slinging…"
+            if (slingMut.data?.ok === false) return <span className="text-destructive">{slingMut.data?.error || "sling failed"}</span>
+            if (slingMut.data?.ok) return <span className="text-foreground">slung. bead {slingMut.data?.bead_id ?? "?"}</span>
+            return <span>⌘↵ submit · esc cancel</span>
+          })()}
         </div>
         <button
           onClick={submit}

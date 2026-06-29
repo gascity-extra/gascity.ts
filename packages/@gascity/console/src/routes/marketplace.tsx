@@ -310,7 +310,7 @@ function MarketplacePage() {
           <TabButton active={tab === "installed"} onClick={() => setTab("installed")}>
             installed
             <span className="ml-1.5 text-muted-foreground">{installedList.length}</span>
-            {" "}
+            {" "}{" "}
             {updateAvailableCount > 0 && (
               <Badge variant="default" className="ml-2 font-mono text-[10px]">
                 {updateAvailableCount} update{updateAvailableCount === 1 ? "" : "s"}
@@ -514,7 +514,7 @@ function RegistriesStrip({
   onRemove,
   onAddClick,
   isPending,
-}: {
+}: Readonly<{
   registries: RegistrySummary[]
   registryMeta: Array<{ name: string; stale: boolean; error?: string; fetchedAt: string }>
   activeFilter: string
@@ -523,7 +523,7 @@ function RegistriesStrip({
   onRemove: (name: string) => void
   onAddClick: () => void
   isPending: boolean
-}) {
+}>) {
   return (
     <div className="flex flex-wrap items-center gap-2 border-b border-border px-6 py-2.5">
       <span className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">

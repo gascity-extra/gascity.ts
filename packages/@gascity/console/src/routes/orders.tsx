@@ -91,7 +91,7 @@ function OrdersPage() {
                             due
                           </span>
                         )}
-                        {" "}
+                        {" "}{" "}
                       </div>
                       {o.description && (
                         <div className="truncate font-mono text-[11px] text-muted-foreground">

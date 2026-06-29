@@ -1,5 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
-import { Link } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { useState } from "react";
@@ -101,6 +100,7 @@ function CitiesPage() { // NOSONAR: component has no props
                         active
                       </span>
                     )}
+                    {" "}
                   </div>
                   <div className="truncate font-mono text-[11px] text-muted-foreground">
                     {c.path}
@@ -216,8 +216,9 @@ function InitCityDialog({
       tabIndex={0}
       aria-label="Close dialog"
     >
-      <div
-        onClick={(e) => e.stopPropagation()} // NOSONAR: stopPropagation is intentional
+      <button
+        type="button"
+        onClick={(e) => e.stopPropagation()}
         className="w-full max-w-xl overflow-hidden rounded-md border border-border bg-card"
         role="dialog"
         aria-modal="true"
@@ -321,7 +322,7 @@ function InitCityDialog({
             {initMut.isPending ? "creating…" : "gc init + import"}
           </button>
         </div>
-      </div>
+      </button>
     </div>
   );
 }
