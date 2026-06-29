@@ -563,8 +563,8 @@ export class E2EActions {
       // marketplace (e.g. an arbitrary source from the legacy
       // /packs form, which still exists in case some operators
       // want it).
-      void card;
-      void description;
+      card;
+      description;
     }
     await this.page.waitForTimeout(2000);
   }
