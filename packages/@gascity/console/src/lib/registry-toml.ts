@@ -131,7 +131,7 @@ function handleSection(
   let newCurrentRelease = currentRelease
 
   if (isPackRelease) {
-    const parent = doc.packs[doc.packs.length - 1]
+    const parent = doc.packs.at(-1)
     if (!parent) {
       throw new Error(`registry.toml line ${lineIndex + 1}: pack.release outside of any pack table`)
     }
@@ -181,7 +181,7 @@ function handlePackKey(
   packsByName: Map<string, RegistryPack>,
   lineIndex: number
 ): void {
-  const pack = doc.packs[doc.packs.length - 1]
+  const pack = doc.packs.at(-1)
   if (!pack) {
     throw new Error(`registry.toml line ${lineIndex + 1}: key outside of a pack table`)
   }

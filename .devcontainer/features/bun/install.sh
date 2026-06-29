@@ -16,11 +16,9 @@ if [ -f "$HOME/.bashrc" ]; then
 fi
 
 # Add to .zshrc if it exists
-if [ -f "$HOME/.zshrc" ]; then
-    if ! grep -q 'export BUN_INSTALL="$HOME/.bun"' "$HOME/.zshrc"; then
-        echo 'export BUN_INSTALL="$HOME/.bun"' >> "$HOME/.zshrc"
-        echo 'export PATH="$BUN_INSTALL/bin:$PATH"' >> "$HOME/.zshrc"
-    fi
+if [[ -f "$HOME/.zshrc" ]] && ! grep -q 'export BUN_INSTALL="$HOME/.bun"' "$HOME/.zshrc"; then
+    echo 'export BUN_INSTALL="$HOME/.bun"' >> "$HOME/.zshrc"
+    echo 'export PATH="$BUN_INSTALL/bin:$PATH"' >> "$HOME/.zshrc"
 fi
 
 # Verify installation

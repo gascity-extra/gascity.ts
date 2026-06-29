@@ -58,7 +58,7 @@ trap cleanup EXIT
 ready=0
 for _ in $(seq 1 50); do
   CODE=$(curl -s -o /dev/null -w '%{http_code}' "http://127.0.0.1:${MOCK_GC_PORT}/health" 2>/dev/null || echo 000)
-  if [ "${CODE}" != "000" ]; then
+  if [[ "${CODE}" != "000" ]]; then
     ready=1
     break
   fi

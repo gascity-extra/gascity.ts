@@ -240,7 +240,7 @@ async function copyText(text: string, setFlag: (b: boolean) => void): Promise<vo
       ta.focus();
       ta.select();
       ok = document.execCommand("copy");
-      document.body.removeChild(ta);
+      ta.remove();
     } catch {
       // Both paths failed. The operator can still drag-select the pre block
       // and Cmd+C — we just don't show "copied!".
@@ -307,11 +307,11 @@ function SupervisorPopover({
   useEffect(() => {
     if (!transition) return;
     const elapsed = Date.now() - transitionStart.current;
-    if (transition === "starting" && health?.reachable) {
-      setTransition(null);
-    } else if (transition === "stopping" && !health?.reachable) {
-      setTransition(null);
-    } else if (elapsed > 35000) {
+    if (
+      transition === "starting" && health?.reachable ||
+      transition === "stopping" && !health?.reachable ||
+      elapsed > 35000
+    ) {
       setTransition(null);
     }
   }, [transition, health?.reachable]);
@@ -328,11 +328,13 @@ function SupervisorPopover({
   // (supervisor not reachable) and `up` (supervisor reachable, no
   // city-state inference here). The optimistic `starting` /
   // `stopping` states clear as soon as health flips.
-  const phase: Phase = transition
-    ? transition
-    : !health?.reachable
-      ? "down"
-      : "up";
+  const phase: Phase = getPhase(transition, health?.reachable);
+
+  function getPhase(transition: string | null, reachable: boolean | undefined): Phase {
+    if (transition) return transition as Phase;
+    if (!reachable) return "down";
+    return "up";
+  }
 
   function appendConsole(cmd: string, out: string) {
     const ts = new Date().toLocaleTimeString();
@@ -411,14 +413,14 @@ const restartMut = useMutation({
     },
   });
 
-  const phaseLabel =
-    phase === "starting"
-      ? "starting…"
-      : phase === "stopping"
-        ? "stopping…"
-        : phase === "up"
-          ? "supervisor up"
-          : "supervisor down";
+  const phaseLabel = getPhaseLabel(phase);
+
+  function getPhaseLabel(phase: Phase): string {
+    if (phase === "starting") return "starting…";
+    if (phase === "stopping") return "stopping…";
+    if (phase === "up") return "supervisor up";
+    return "supervisor down";
+  }
 
   // Button enablement: when down, only start is available; when up,
   // stop + restart are available; during a transition the other
@@ -426,7 +428,6 @@ const restartMut = useMutation({
   const canStart = phase === "down" && !transition;
   const canStop = phase === "up" && !transition;
   const canRestart = phase === "up" && !transition;
-  const busy = !!transition;
   const startKind = phase === "down" ? "supervisor-start" : null;
   const stopKind = phase === "up" ? "supervisor-stop" : null;
   const restartKind = phase === "up" ? "supervisor-restart" : null;

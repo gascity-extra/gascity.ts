@@ -231,16 +231,18 @@ async function handleConnection(
     cleanupPty = handle.cleanup;
     detachSocket = bindSocketToPty(ws, pty);
   } catch (err) {
-    const msg =
-      err instanceof TmuxPtyUnavailableError
-        ? err.message
-        : err instanceof Error
-          ? err.message
-          : String(err);
+    const msg = getErrorMessage(err);
     sendError(ws, msg);
     removeEntry();
     return;
   }
+}
+
+function getErrorMessage(err: unknown): string {
+  if (err instanceof TmuxPtyUnavailableError) return err.message;
+  if (err instanceof Error) return err.message;
+  return String(err);
+}
 
   // Hello frame — gives the client a chance to resize before any data arrives.
   try {

@@ -39,5 +39,5 @@ export function derivePackName(source: string): string {
   tail = tail.replace(/\/+$/, '')
   // Last path segment.
   const segs = tail.split('/').filter((s) => s.length > 0)
-  return segs.length > 0 ? segs[segs.length - 1] : source
+  return segs.length > 0 ? segs.at(-1)! : source
 }
