@@ -9,7 +9,7 @@ import {
   gcListCities,
   gcMailInbox,
   gcMailSend,
-} from "@/server/gc.functions.internal";
+} from "@/../server/gc.functions.internal";
 
 export const Route = createFileRoute("/mail")({
   head: () => ({ meta: [{ title: "Mail — gc console" }] }),

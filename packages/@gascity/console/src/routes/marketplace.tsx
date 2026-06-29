@@ -27,7 +27,7 @@ import {
   type MarketplaceEntry,
   type PackUpdateInfo,
   type RegistrySummary,
-} from "@/server/gc.functions.internal";
+} from "@/../server/gc.functions.internal";
 import {
   Card,
   CardContent,
