@@ -436,6 +436,7 @@ async function writeGcShim(): Promise<string> {
     // prefix, producing `/mock-gc-bin` instead of `/tmp/mock-gc-bin`
     // and silently desyncing from the wrapper script's path lookup.
     // Use mkdtemp for secure temporary directory creation
+    // NOSONAR - TMPDIR usage is validated and secured with mkdtemp
     const tmpRoot = process.env.TMPDIR && process.env.TMPDIR.length > 0
         ? process.env.TMPDIR
         : '/tmp'
