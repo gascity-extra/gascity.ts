@@ -428,20 +428,20 @@ const server = createServer(async (req, res) => {
  * path; in production `GC_BIN` defaults to a real `gc` on PATH.
  */
 async function writeGcShim(): Promise<string> {
-    const { writeFileSync, mkdirSync, chmodSync } = await import('node:fs')
+    const { writeFileSync, mkdirSync, chmodSync, mkdtempSync } = await import('node:fs')
+    const { resolve, join } = await import('node:path')
     // Mirror the bash convention `${TMPDIR:-/tmp}` exactly: an empty
     // TMPDIR string is treated the same as an unset TMPDIR and
     // resolves to `/tmp`. Using `??` would treat `''` as a real path
     // prefix, producing `/mock-gc-bin` instead of `/tmp/mock-gc-bin`
     // and silently desyncing from the wrapper script's path lookup.
-    // Validate TMPDIR to prevent directory traversal attacks
+    // Use mkdtemp for secure temporary directory creation
     const tmpRoot = process.env.TMPDIR && process.env.TMPDIR.length > 0
         ? process.env.TMPDIR
         : '/tmp'
-    // Ensure tmpRoot is an absolute path and doesn't contain parent directory references
-    const safeTmpRoot = require('path').resolve(tmpRoot)
-    const dir = `${safeTmpRoot}/mock-gc-bin`
-    // Ensure directory is safely writable - use 0o700 for user-only access
+    const safeTmpRoot = resolve(tmpRoot)
+    const tmpDir = mkdtempSync(join(safeTmpRoot, 'mock-gc-'))
+    const dir = join(tmpDir, 'mock-gc-bin')
     mkdirSync(dir, { recursive: true, mode: 0o700 })
     const binPath = `${dir}/gc`
     const script = `#!/usr/bin/env bash
