@@ -32,7 +32,6 @@ import {
   Card,
   CardContent,
   CardDescription,
-  CardFooter,
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
@@ -485,9 +484,9 @@ function TabButton({
   onClick,
   children,
 }: {
-  active: boolean
-  onClick: () => void
-  children: React.ReactNode
+  readonly active: boolean
+  readonly onClick: () => void
+  readonly children: React.ReactNode
 }) {
   return (
     <button
@@ -574,14 +573,14 @@ function RegistryChip({
   onRemove,
   isPending,
 }: {
-  active: boolean
-  onClick: () => void
-  label: string
-  stale?: boolean
-  error?: string
-  onRefresh?: () => void
-  onRemove?: () => void
-  isPending?: boolean
+  readonly active: boolean
+  readonly onClick: () => void
+  readonly label: string
+  readonly stale?: boolean
+  readonly error?: string
+  readonly onRefresh?: () => void
+  readonly onRemove?: () => void
+  readonly isPending?: boolean
 }) {
   return (
     <div

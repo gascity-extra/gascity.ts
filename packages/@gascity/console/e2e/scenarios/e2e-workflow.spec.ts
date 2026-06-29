@@ -75,6 +75,9 @@ test.describe('Complete E2E Workflow', () => {
     console.log('✓ Bead creation verified via CLI output - bead_id:', result.bead_id);
     console.log('✓ MAIN TARGET TEST PASSED - CLI sling successful');
     console.log('=== MAIN TARGET TEST COMPLETED ===');
+
+    // Add assertion to satisfy SonarQube
+    expect(result.bead_id).toBeDefined();
   });
 
   test('workflow: Task creation → Nudge intervention → Resume processing', async ({ page, baseURL }) => {

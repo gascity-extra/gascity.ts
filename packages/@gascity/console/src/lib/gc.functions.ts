@@ -2531,8 +2531,9 @@ export const gcListMarketplaceEntries = createServerFn({ method: 'GET' })
       try {
         doc = parseRegistryToml(f.toml)
       } catch (err) {
-        registryMeta[registryMeta.length - 1] = {
-          ...registryMeta[registryMeta.length - 1]!,
+        const lastIndex = registryMeta.length - 1
+        registryMeta[lastIndex] = {
+          ...registryMeta[lastIndex]!,
           error: err instanceof Error ? err.message : String(err),
         }
         continue
