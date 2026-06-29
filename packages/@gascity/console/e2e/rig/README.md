@@ -50,7 +50,7 @@ name = "gc-e2e"
 
 [[agent]]
 name = "devin-test"
-start_command = '''$(sed -n '/^start_command = /,/'''$/p' e2e/rig/agents/devin-test/agent.toml)'''
+start_command = '''$(sed -n '/^start_command = /,/'\''$/p' e2e/rig/agents/devin-test/agent.toml)'''
 prompt_template = "//agents/devin-test/prompt.template.md"
 EOF
 

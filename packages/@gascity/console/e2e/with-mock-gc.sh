@@ -47,7 +47,7 @@ cleanup() {
     pkill -P "${MOCK_PID}" 2>/dev/null || true
     exit "${rc}"
 }
-trap cleanup EXIT INT TERM
+trap cleanup EXIT
 
 # Probe /health so Vite doesn't start until the backend is listening.
 # The mock returns 503 when the supervisor is intentionally down, which
