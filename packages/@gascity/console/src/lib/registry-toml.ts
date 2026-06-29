@@ -73,59 +73,21 @@ function coerceScalar(value: string): string | number {
  */
 export function parseRegistryToml(text: string): RegistryDocument {
   const doc: RegistryDocument = { packs: [] }
-  // Current section path as an array. Empty array means top-level
-  // scalars; a single 'pack' means we are inside a pack table;
-  // ['pack', 'release'] means we are inside a pack.release subtable.
   let path: string[] = []
   const packsByName = new Map<string, RegistryPack>()
-  // The release we are currently populating, so subsequent key/value
-  // lines attach to the most recent pack.release subtable.
   let currentRelease: RegistryRelease | null = null
 
   const lines = text.split(/\r?\n/)
   for (let i = 0; i < lines.length; i++) {
     const rawLine = lines[i]
     const line = rawLine.trim()
-    if (line.length === 0 || line.startsWith('#')) continue
+    if (shouldSkipLine(line)) continue
 
     const sectionMatch = line.match(SECTION_RE)
     if (sectionMatch) {
-      const segs = sectionMatch[1].trim().split('.').map((s) => s.trim())
-      if (segs.length === 0 || segs.some((s) => s.length === 0)) {
-        throw new Error(`registry.toml line ${i + 1}: malformed section header`)
-      }
-      // Validate: only `pack` and `pack.release` are recognised.
-      const isPack = segs[0] === 'pack'
-      const isPackRelease =
-        segs.length === 2 && segs[0] === 'pack' && segs[1] === 'release'
-      if (!isPack && !isPackRelease) {
-        throw new Error(
-          `registry.toml line ${i + 1}: unsupported section [${segs.join('.')}]`,
-        )
-      }
-      path = segs
-      if (isPackRelease) {
-        // pack.release — attach to the most recent pack table.
-        // This branch is checked BEFORE the bare `pack` branch
-        // because `[[pack.release]]` also satisfies `segs[0] === 'pack'`.
-        const parent = doc.packs[doc.packs.length - 1]
-        if (!parent) {
-          throw new Error(
-            `registry.toml line ${i + 1}: pack.release outside of any pack table`,
-          )
-        }
-        const release: RegistryRelease = { version: '' }
-        parent.releases.push(release)
-        currentRelease = release
-      } else if (isPack) {
-        const pack: RegistryPack = {
-          name: '',
-          source: '',
-          releases: [],
-        }
-        doc.packs.push(pack)
-        currentRelease = null
-      }
+      const result = handleSection(sectionMatch[1], path, doc, currentRelease, i)
+      path = result.path
+      currentRelease = result.currentRelease
       continue
     }
 
@@ -134,77 +96,143 @@ export function parseRegistryToml(text: string): RegistryDocument {
       throw new Error(`registry.toml line ${i + 1}: cannot parse line: ${rawLine}`)
     }
     const key = kv[1]
-    const rawValue = kv[2]
-    const value = coerceScalar(rawValue)
+    const value = coerceScalar(kv[2])
 
-    if (path.length === 0) {
-      // Top-level scalar (e.g. schema = 1).
-      if (key === 'schema') {
-        if (typeof value !== 'number') {
-          throw new Error(`registry.toml line ${i + 1}: schema must be a number`)
-        }
-        doc.schema = value
-      }
-      // Unknown top-level keys are ignored for forward-compat.
-      continue
-    }
-
-    if (path.length === 1 && path[0] === 'pack') {
-      const pack = doc.packs[doc.packs.length - 1]
-      if (!pack) {
-        throw new Error(`registry.toml line ${i + 1}: key outside of a pack table`)
-      }
-      if (key === 'name') {
-        if (typeof value !== 'string' || value.length === 0) {
-          throw new Error(`registry.toml line ${i + 1}: pack name must be a non-empty string`)
-        }
-        if (packsByName.has(value)) {
-          throw new Error(`registry.toml line ${i + 1}: duplicate pack name "${value}"`)
-        }
-        pack.name = value
-        packsByName.set(value, pack)
-      } else if (key === 'description') {
-        if (typeof value !== 'string') {
-          throw new Error(`registry.toml line ${i + 1}: description must be a string`)
-        }
-        pack.description = value
-      } else if (key === 'source') {
-        if (typeof value !== 'string' || value.length === 0) {
-          throw new Error(`registry.toml line ${i + 1}: source must be a non-empty string`)
-        }
-        pack.source = value
-      } else if (key === 'source_kind' || key === 'sourceKind') {
-        pack.sourceKind = String(value)
-      }
-      // Unknown pack-level keys ignored for forward-compat.
-      continue
-    }
-
-    if (path.length === 2 && path[0] === 'pack' && path[1] === 'release') {
-      if (!currentRelease) {
-        throw new Error(`registry.toml line ${i + 1}: key outside of a pack.release subtable`)
-      }
-      if (key === 'version') {
-        currentRelease.version = String(value)
-      } else if (key === 'ref') {
-        currentRelease.ref = String(value)
-      } else if (key === 'commit') {
-        currentRelease.commit = String(value)
-      } else if (key === 'hash') {
-        currentRelease.hash = String(value)
-      } else if (key === 'description') {
-        currentRelease.description = String(value)
-      }
-      // Unknown release keys ignored for forward-compat.
-      continue
-    }
+    handleKeyValue(key, value, path, doc, packsByName, currentRelease, i)
   }
 
+  validateDocument(doc)
+  return doc
+}
+
+function shouldSkipLine(line: string): boolean {
+  return line.length === 0 || line.startsWith('#')
+}
+
+function handleSection(
+  sectionHeader: string,
+  currentPath: string[],
+  doc: RegistryDocument,
+  currentRelease: RegistryRelease | null,
+  lineIndex: number
+): { path: string[]; currentRelease: RegistryRelease | null } {
+  const segs = sectionHeader.trim().split('.').map((s) => s.trim())
+  if (segs.length === 0 || segs.some((s) => s.length === 0)) {
+    throw new Error(`registry.toml line ${lineIndex + 1}: malformed section header`)
+  }
+
+  const isPack = segs[0] === 'pack'
+  const isPackRelease = segs.length === 2 && segs[0] === 'pack' && segs[1] === 'release'
+  if (!isPack && !isPackRelease) {
+    throw new Error(`registry.toml line ${lineIndex + 1}: unsupported section [${segs.join('.')}]`)
+  }
+
+  const newPath = segs
+  let newCurrentRelease = currentRelease
+
+  if (isPackRelease) {
+    const parent = doc.packs[doc.packs.length - 1]
+    if (!parent) {
+      throw new Error(`registry.toml line ${lineIndex + 1}: pack.release outside of any pack table`)
+    }
+    const release: RegistryRelease = { version: '' }
+    parent.releases.push(release)
+    newCurrentRelease = release
+  } else if (isPack) {
+    const pack: RegistryPack = { name: '', source: '', releases: [] }
+    doc.packs.push(pack)
+    newCurrentRelease = null
+  }
+
+  return { path: newPath, currentRelease: newCurrentRelease }
+}
+
+function handleKeyValue(
+  key: string,
+  value: unknown,
+  path: string[],
+  doc: RegistryDocument,
+  packsByName: Map<string, RegistryPack>,
+  currentRelease: RegistryRelease | null,
+  lineIndex: number
+): void {
+  if (path.length === 0) {
+    handleTopLevelKey(key, value, doc, lineIndex)
+  } else if (path.length === 1 && path[0] === 'pack') {
+    handlePackKey(key, value, doc, packsByName, lineIndex)
+  } else if (path.length === 2 && path[0] === 'pack' && path[1] === 'release') {
+    handleReleaseKey(key, value, currentRelease, lineIndex)
+  }
+}
+
+function handleTopLevelKey(key: string, value: unknown, doc: RegistryDocument, lineIndex: number): void {
+  if (key === 'schema') {
+    if (typeof value !== 'number') {
+      throw new Error(`registry.toml line ${lineIndex + 1}: schema must be a number`)
+    }
+    doc.schema = value
+  }
+}
+
+function handlePackKey(
+  key: string,
+  value: unknown,
+  doc: RegistryDocument,
+  packsByName: Map<string, RegistryPack>,
+  lineIndex: number
+): void {
+  const pack = doc.packs[doc.packs.length - 1]
+  if (!pack) {
+    throw new Error(`registry.toml line ${lineIndex + 1}: key outside of a pack table`)
+  }
+
+  if (key === 'name') {
+    if (typeof value !== 'string' || value.length === 0) {
+      throw new Error(`registry.toml line ${lineIndex + 1}: pack name must be a non-empty string`)
+    }
+    if (packsByName.has(value)) {
+      throw new Error(`registry.toml line ${lineIndex + 1}: duplicate pack name "${value}"`)
+    }
+    pack.name = value
+    packsByName.set(value, pack)
+  } else if (key === 'description') {
+    if (typeof value !== 'string') {
+      throw new Error(`registry.toml line ${lineIndex + 1}: description must be a string`)
+    }
+    pack.description = value
+  } else if (key === 'source') {
+    if (typeof value !== 'string' || value.length === 0) {
+      throw new Error(`registry.toml line ${lineIndex + 1}: source must be a non-empty string`)
+    }
+    pack.source = value
+  } else if (key === 'source_kind' || key === 'sourceKind') {
+    pack.sourceKind = String(value)
+  }
+}
+
+function handleReleaseKey(key: string, value: unknown, currentRelease: RegistryRelease | null, lineIndex: number): void {
+  if (!currentRelease) {
+    throw new Error(`registry.toml line ${lineIndex + 1}: key outside of a pack.release subtable`)
+  }
+
+  if (key === 'version') {
+    currentRelease.version = String(value)
+  } else if (key === 'ref') {
+    currentRelease.ref = String(value)
+  } else if (key === 'commit') {
+    currentRelease.commit = String(value)
+  } else if (key === 'hash') {
+    currentRelease.hash = String(value)
+  } else if (key === 'description') {
+    currentRelease.description = String(value)
+  }
+}
+
+function validateDocument(doc: RegistryDocument): void {
   // Filter out any malformed pack (missing name/source) so we don't
   // hand a half-built record to the UI. The upstream file is
   // well-formed, but a hostile mirror might not be.
   doc.packs = doc.packs.filter((p) => p.name && p.source)
-  return doc
 }
 
 /**

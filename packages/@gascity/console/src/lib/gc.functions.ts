@@ -2445,6 +2445,25 @@ export interface MarketplaceListing {
  * result to a single registry name — the UI uses it for the
  * registry filter chips.
  */
+async function getConfiguredRegistries(cwd: string | undefined): Promise<{ registries: RegistrySummary[]; error: string | undefined }> {
+  let configured: RegistrySummary[] = []
+  let configuredError: string | undefined
+  try {
+    const r = await runGc(['pack', 'registry', 'list', '--json'], {
+      timeoutMs: 15_000,
+      cwd,
+    })
+    if (r.ok) {
+      configured = parseRegistryList(r.stdout)
+    } else if (!/no such file|city/i.test(r.stderr)) {
+      configuredError = (r.stderr || r.stdout).trim().slice(0, 400)
+    }
+  } catch (err) {
+    configuredError = err instanceof Error ? err.message : String(err)
+  }
+  return { registries: configured, error: configuredError }
+}
+
 export const gcListMarketplaceEntries = createServerFn({ method: 'GET' })
   .validator(
     z
@@ -2455,28 +2474,9 @@ export const gcListMarketplaceEntries = createServerFn({ method: 'GET' })
       .optional(),
   )
   .handler(async ({ data }) => {
-    // Pull the configured-registry list, but fall back gracefully
-    // when `gc` isn't bootstrapped (no city dir) or returns an
-    // empty list. The upstream-default URL is the silent fallback
-    // so the Marketplace is never empty.
-    let configured: RegistrySummary[] = []
-    let configuredError: string | undefined
-    try {
-      const r = await runGc(['pack', 'registry', 'list', '--json'], {
-        timeoutMs: 15_000,
-        cwd: data?.cwd,
-      })
-      if (r.ok) {
-        configured = parseRegistryList(r.stdout)
-      } else if (!/no such file|city/i.test(r.stderr)) {
-        configuredError = (r.stderr || r.stdout).trim().slice(0, 400)
-      }
-    } catch (err) {
-      configuredError = err instanceof Error ? err.message : String(err)
-    }
-
-    const registries = configured.length > 0
-      ? configured
+    const configured = await getConfiguredRegistries(data?.cwd)
+    const registries = configured.registries.length > 0
+      ? configured.registries
       : [{ name: 'upstream', source: DEFAULT_MARKETPLACE_URL }]
 
     const wantRegistry = data?.registry?.trim() || ''
@@ -2487,9 +2487,6 @@ export const gcListMarketplaceEntries = createServerFn({ method: 'GET' })
     const { parseRegistryToml, latestRelease, inferPackTag, inferPackTier } =
       await import('./registry-toml')
 
-    // Fetch every registry's TOML in parallel — the cache + per-URL
-    // stale-on-error handling means a slow registry can't block the
-    // others.
     const fetched = await Promise.all(
       filteredRegistries.map((r) => fetchRegistryToml(r.source).then((f) => ({ r, f }))),
     )
