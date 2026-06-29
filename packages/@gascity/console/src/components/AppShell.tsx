@@ -428,6 +428,8 @@ return (
       <div
         className="absolute right-4 top-11 z-50 w-[620px] overflow-hidden rounded-md border border-border bg-card shadow-lg"
         onClick={(e) => e.stopPropagation()}
+        role="dialog"
+        aria-modal="true"
       >
         <div className="flex items-center justify-between border-b border-border px-4 py-2.5">
           <div className="flex items-center gap-2 font-mono text-xs">
@@ -691,6 +693,8 @@ function CommandPalette({
       <div
         onClick={(e) => e.stopPropagation()}
         className="w-full max-w-md overflow-hidden rounded-md border border-border bg-card"
+        role="dialog"
+        aria-modal="true"
       >
         <Command label="Command palette">
           <Command.Input
@@ -746,10 +750,10 @@ import { SlingComposer } from "./SlingComposer";
 function SlingDrawer({
   open,
   onOpenChange,
-}: {
+}: Readonly<{
   open: boolean;
   onOpenChange: (v: boolean) => void;
-}) {
+}>) {
   if (!open) return null;
   return (
     <div
@@ -759,6 +763,8 @@ function SlingDrawer({
       <div
         onClick={(e) => e.stopPropagation()}
         className="w-full max-w-xl overflow-hidden rounded-md border border-border bg-card"
+        role="dialog"
+        aria-modal="true"
       >
         <SlingComposer onDone={() => onOpenChange(false)} />
       </div>
