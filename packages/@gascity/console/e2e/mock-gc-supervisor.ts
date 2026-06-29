@@ -438,7 +438,8 @@ async function writeGcShim(): Promise<string> {
         ? process.env.TMPDIR
         : '/tmp'
     const dir = `${tmpRoot}/mock-gc-bin`
-    mkdirSync(dir, { recursive: true })
+    // Ensure directory is safely writable - use 0o700 for user-only access
+    mkdirSync(dir, { recursive: true, mode: 0o700 })
     const binPath = `${dir}/gc`
     const script = `#!/usr/bin/env bash
 set -euo pipefail

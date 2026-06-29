@@ -825,17 +825,17 @@ function InstalledView({
   onUpdate,
   onUpdateAll,
 }: {
-  installed: PackUpdateInfo[]
-  isLoading: boolean
-  updateOnePending: boolean
-  updateOneVars: unknown
-  updateAllPending: boolean
-  uninstallPending: boolean
-  uninstallVars: unknown
-  availableCount: number
-  onUninstall: (name: string) => void
-  onUpdate: (name: string) => void
-  onUpdateAll: () => void
+  readonly installed: PackUpdateInfo[]
+  readonly isLoading: boolean
+  readonly updateOnePending: boolean
+  readonly updateOneVars: unknown
+  readonly updateAllPending: boolean
+  readonly uninstallPending: boolean
+  readonly uninstallVars: unknown
+  readonly availableCount: number
+  readonly onUninstall: (name: string) => void
+  readonly onUpdate: (name: string) => void
+  readonly onUpdateAll: () => void
 }) {
   return (
     <div className="flex-1 overflow-y-auto p-6">
@@ -890,11 +890,11 @@ function InstalledCard({
   onUpdate,
   onUninstall,
 }: {
-  info: PackUpdateInfo
-  isUpdatePending: boolean
-  isUninstallPending: boolean
-  onUpdate: () => void
-  onUninstall: () => void
+  readonly info: PackUpdateInfo
+  readonly isUpdatePending: boolean
+  readonly isUninstallPending: boolean
+  readonly onUpdate: () => void
+  readonly onUninstall: () => void
 }) {
   const statusBadge = (() => {
     if (info.status === "update_available") {

@@ -37,7 +37,7 @@ MOCK_PID=$!
 VITE_PID=""
 cleanup() {
     local rc=$?
-    if [ -n "${VITE_PID}" ]; then
+    if [[ -n "${VITE_PID}" ]]; then
         kill "${VITE_PID}" 2>/dev/null || true
         pkill -P "${VITE_PID}" 2>/dev/null || true
     fi
@@ -101,7 +101,7 @@ VITE_PID=$!
 # promptly when the wrapper is asked to stop, then wait for it so the
 # EXIT trap fires only after Vite actually exits.
 forward_signal() {
-    if [ -n "${VITE_PID}" ]; then
+    if [[ -n "${VITE_PID}" ]]; then
         kill -TERM "${VITE_PID}" 2>/dev/null || true
     fi
 }
