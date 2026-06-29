@@ -39,12 +39,12 @@ cleanup() {
     local rc=$?
     if [ -n "${VITE_PID}" ]; then
         kill "${VITE_PID}" 2>/dev/null || true
+        pkill -P "${VITE_PID}" 2>/dev/null || true
     fi
     kill "${MOCK_PID}" 2>/dev/null || true
     # Best-effort: also reap any grandchildren (Vite spawns workers)
     # so they don't linger as zombies after the mock's port is freed.
     pkill -P "${MOCK_PID}" 2>/dev/null || true
-    pkill -P "${VITE_PID}" 2>/dev/null || true
     exit "${rc}"
 }
 trap cleanup EXIT INT TERM

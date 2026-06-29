@@ -858,7 +858,7 @@ function InstalledView({
             }
             isUninstallPending={
               uninstallPending &&
-              (uninstallVars as { name?: string } | undefined)?.name === info.name
+              uninstallVars === info.name
             }
             onUpdate={() => onUpdate(info.name)}
             onUninstall={() => onUninstall(info.name)}
