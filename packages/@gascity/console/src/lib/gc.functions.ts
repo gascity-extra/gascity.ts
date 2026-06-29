@@ -373,7 +373,8 @@ async function startCityImpl(cityName: string, dir?: string): Promise<{
   error?: string
 }> {
   try {
-    const csrf = `console-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`
+    const randomBytes = await import('node:crypto').then(c => c.randomBytes(8).toString('hex'))
+    const csrf = `console-${Date.now()}-${randomBytes}`
     // `POST /v0/city` is the upstream-canonical "create + register + start"
     // endpoint (`internal/api/huma_handlers_supervisor.go:108-118`). It
     // accepts an absolute city path in `dir` and resolves relative paths
@@ -439,7 +440,8 @@ async function stopCityImpl(cityName: string): Promise<{
   error?: string
 }> {
   try {
-    const csrf = `console-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`
+    const randomBytes = await import('node:crypto').then(c => c.randomBytes(8).toString('hex'))
+    const csrf = `console-${Date.now()}-${randomBytes}`
     const accepted = await DefaultService.postV0CityByCityNameUnregister(csrf, cityName)
     const acceptedOk = unwrap(accepted as Envelope<{ event_cursor?: string; request_id?: string }>)
     if (!acceptedOk) {
