@@ -483,7 +483,7 @@ case "\${1:-}" in
     ;;
   status)        curl -fsS "http://127.0.0.1:\${PORT}/health" || echo "down"; exit 0 ;;
   version)       echo "${SUPERVISOR_VERSION}" ;;
-  *)             echo "mock-gc: unknown subcommand \$1" >&2; exit 2 ;;
+  *)             echo "mock-gc: unknown subcommand $1" >&2; exit 2 ;;
 esac
 `
     writeFileSync(binPath, script, { mode: 0o755 })

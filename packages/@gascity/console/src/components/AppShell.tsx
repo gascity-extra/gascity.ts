@@ -620,7 +620,7 @@ return (
                 text === displayLog
                   ? false
                   : text === log?.output
-                    ? /^\(no supervisor events/.test(log.output)
+                    ? log.output.startsWith('(no supervisor events')
                     : true
               return (
                 <span className={isPlaceholder ? "italic opacity-70" : undefined}>

@@ -135,6 +135,9 @@ test.describe('Alternative E2E Workflow', () => {
       console.log('✓ SUPERVISOR IS OPERATIONAL');
     }
 
+    // Assert that supervisor panel loaded successfully
+    expect(pageContent.length).toBeGreaterThan(0);
+
     // Close supervisor panel
     await actions.closeSupervisorPanel();
   });

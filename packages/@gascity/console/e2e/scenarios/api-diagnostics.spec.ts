@@ -31,6 +31,9 @@ test.describe('GC API Diagnostics', () => {
     console.log('Cities page length:', pageContent.length);
     console.log('Has cities:', !pageContent.toLowerCase().includes('no cities'));
 
+    // Assert that page loaded successfully
+    expect(pageContent.length).toBeGreaterThan(0);
+
     // Look for city names in content
     if (pageContent.includes('no cities')) {
       console.log('API returned no cities');
