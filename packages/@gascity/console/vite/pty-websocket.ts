@@ -236,13 +236,6 @@ async function handleConnection(
     removeEntry();
     return;
   }
-}
-
-function getErrorMessage(err: unknown): string {
-  if (err instanceof TmuxPtyUnavailableError) return err.message;
-  if (err instanceof Error) return err.message;
-  return String(err);
-}
 
   // Hello frame — gives the client a chance to resize before any data arrives.
   try {
@@ -280,4 +273,10 @@ function getErrorMessage(err: unknown): string {
     }
     removeEntry();
   });
+}
+
+function getErrorMessage(err: unknown): string {
+  if (err instanceof TmuxPtyUnavailableError) return err.message;
+  if (err instanceof Error) return err.message;
+  return String(err);
 }
