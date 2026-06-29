@@ -65,5 +65,8 @@ test.describe('GC API Diagnostics', () => {
     for (const req of requests) {
       console.log('  -', req);
     }
+
+    // Assert that we captured some API requests
+    expect(requests.length).toBeGreaterThan(0);
   });
 });

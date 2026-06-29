@@ -108,6 +108,9 @@ test.describe('Alternative E2E Workflow', () => {
         console.log('✓ SESSION RESPONDED TO NUDGE');
       }
     }
+
+    // Assert that we found and checked at least one session
+    expect(sessions.length).toBeGreaterThan(0);
   });
 
   test('ALTERNATIVE: Check supervisor health → Verify system status', async ({ page, baseURL }) => {

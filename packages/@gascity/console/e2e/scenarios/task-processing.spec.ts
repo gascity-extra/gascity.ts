@@ -226,8 +226,13 @@ test.describe('Task Processing Automation', () => {
       // Check if order created beads
       const beads = await actions.getBeadList('all');
       console.log(`Beads after order fire: ${beads.length}`);
+
+      // Assert that we either have orders or beads
+      expect(orders.length).toBeGreaterThan(0);
     } else {
       console.log('No orders available to test');
+      // Skip test if no orders available
+      test.skip();
     }
   });
 });

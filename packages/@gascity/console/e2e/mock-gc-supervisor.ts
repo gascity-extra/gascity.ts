@@ -138,6 +138,7 @@ function freshState(): State {
         city: {
             name: 'default',
             phase: 'stopped',
+            // NOSONAR: Using /tmp is safe for this mock e2e test server
             path: '/tmp/gc-mock/default',
             agents: { total: 0, running: 0, idle: 0, suspended: 0, error: 0 },
             sessions: { total: 0, running: 0, idle: 0 },
