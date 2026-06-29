@@ -39,7 +39,7 @@ export interface RegistryDocument {
 }
 
 const SECTION_RE = /^\[\[([^\]]+)\]\]$/
-const KV_RE = /^([a-zA-Z_][a-zA-Z0-9_-]*)\s*=\s*(.+)$/
+const KV_RE = /^([a-zA-Z_][\w-]*)\s*=\s*(.+)$/
 
 function stripInlineComment(value: string): string {
   const idx = value.indexOf('#')
