@@ -430,14 +430,14 @@ const server = createServer(async (req, res) => {
 async function writeGcShim(): Promise<string> {
     const { writeFileSync, mkdirSync, chmodSync, mkdtempSync } = await import('node:fs')
     const { join } = await import('node:path')
+    const { tmpdir } = await import('node:os')
     // Mirror the bash convention `${TMPDIR:-/tmp}` exactly: an empty
     // TMPDIR string is treated the same as an unset TMPDIR and
     // resolves to `/tmp`. Using `??` would treat `''` as a real path
     // prefix, producing `/mock-gc-bin` instead of `/tmp/mock-gc-bin`
     // and silently desyncing from the wrapper script's path lookup.
-    // Use mkdtemp for secure temporary directory creation
-    // Fixed: always use /tmp to satisfy SonarQube security requirements
-    const tmpDir = mkdtempSync('/tmp/mock-gc-')
+    // Use mkdtemp with os.tmpdir() for secure temporary directory creation
+    const tmpDir = mkdtempSync(join(tmpdir(), 'mock-gc-'))
     const dir = join(tmpDir, 'mock-gc-bin')
     mkdirSync(dir, { recursive: true, mode: 0o700 })
     const binPath = `${dir}/gc`
