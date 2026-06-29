@@ -548,11 +548,7 @@ export class E2EActions {
     await this.navigateTo('/marketplace');
     await this.page.waitForLoadState('domcontentloaded');
 
-    // Find the card by name and click its install button.
-    const card = this.page
-      .locator('[role="button"], button, .rounded-xl, [class*="Card"]')
-      .filter({ hasText: name })
-      .first();
+    // Find the install button by name.
     const installButton = this.page
       .getByRole('button', { name: /^install$/i })
       .filter({ hasText: name });

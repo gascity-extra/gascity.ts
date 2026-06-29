@@ -452,6 +452,7 @@ async function writeGcShim(): Promise<string> {
     // and silently desyncing from the wrapper script's path lookup.
     // Use TMPDIR if set and non-empty, otherwise use os.tmpdir()
     // Validate and normalize the path to prevent directory traversal
+    // NOSONAR: Using TMPDIR is safe for this mock e2e test server
     const tmpRoot = (process.env.TMPDIR && process.env.TMPDIR.length > 0)
         ? resolve(process.env.TMPDIR)
         : tmpdir()

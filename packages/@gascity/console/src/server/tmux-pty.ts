@@ -190,7 +190,7 @@ export function handleBrowserMessage(pty: IPty, raw: unknown): void {
 function tryHandleResizeMessage(pty: IPty, trimmed: string): boolean {
   try {
     const msg = JSON.parse(trimmed);
-    if (msg && msg.type === "resize") {
+    if (msg?.type === "resize") {
       const cols = Number(msg.cols);
       const rows = Number(msg.rows);
       if (isValidResize(cols, rows)) {

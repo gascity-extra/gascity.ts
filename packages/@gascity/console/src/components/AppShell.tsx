@@ -273,7 +273,7 @@ function SupervisorPopover({
         reachable: boolean
         baseUrl: string
         version: string
-        error?: string | undefined
+        error?: string
       }
     | undefined;
   version: { version: string } | undefined;
@@ -342,6 +342,11 @@ function SupervisorPopover({
     setConsole((c) =>
       (c ? c + "\n\n" : "") + `[${ts}] ${cmd}\n${out.trim() || "(no output)"}`,
     );
+  }
+
+  function isPlaceholderText(text: string, logOutput: string | undefined): boolean {
+    if (text !== logOutput) return true;
+    return logOutput?.startsWith('(no supervisor events') ?? false;
   }
 
   // The popover only controls the supervisor. Start maps to
@@ -619,9 +624,7 @@ return (
               const isPlaceholder =
                 text === displayLog
                   ? false
-                  : text === log?.output
-                    ? log.output.startsWith('(no supervisor events')
-                    : true
+                  : isPlaceholderText(text, log?.output)
               return (
                 <span className={isPlaceholder ? "italic opacity-70" : undefined}>
                   {text}
