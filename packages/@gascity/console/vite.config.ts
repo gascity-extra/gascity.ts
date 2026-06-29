@@ -33,6 +33,11 @@ export default defineConfig({
       // SSR enabled by default; the dev server handles both client and server.
       // The /api/pty WebSocket is served by `tmuxWebSocketPlugin` below; this
       // file route is reduced to a probe/health endpoint.
+      server: {
+        serverFunctions: {
+          exclude: [/gc\.functions$/],
+        },
+      },
     }),
     tanstackRouter({
       target: 'react',
