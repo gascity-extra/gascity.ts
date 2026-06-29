@@ -105,8 +105,7 @@ test.describe("supervisor panel lifecycle (mock)", () => {
         await expect(stopBtn).toHaveAttribute("data-action-kind", "supervisor-stop");
 
         // Click STOP. Action console records the request.
-        // NOSONAR: Force click is necessary for this e2e test
-        await stopBtn.click({ force: true });
+        await stopBtn.click();
         await expect(page.locator("pre", { hasText: "$ gc supervisor stop" })).toBeVisible({ timeout: 10_000 });
         await expect(page.locator("text=down")).toBeVisible({ timeout: 15_000 });
 
@@ -135,8 +134,7 @@ test.describe("supervisor panel lifecycle (mock)", () => {
         // so during this window /health returns 503 and the panel flips
         // briefly through the "down" phase. After the start comes back
         // we should see "supervisor up · city stopped".
-        // NOSONAR: Force click is necessary for this e2e test
-        await restartBtn.click({ force: true });
+        await restartBtn.click();
         await expect(
             page.locator("pre", { hasText: "$ gc supervisor restart" }),
         ).toBeVisible({ timeout: 15_000 });
@@ -232,8 +230,7 @@ test.describe("supervisor panel lifecycle (mock)", () => {
 
         // Click and wait for the action console to record the daemon
         // start. Then poll until the panel settles on "supervisor up".
-        // NOSONAR: Force click is necessary for this e2e test
-        await startBtn.click({ force: true });
+        await startBtn.click();
         await expect(
             page.locator("pre", { hasText: "$ gc supervisor start" }),
         ).toBeVisible({ timeout: 15_000 });
@@ -269,8 +266,7 @@ test.describe("supervisor panel lifecycle (mock)", () => {
         // content).
         const startBtn = page.getByTestId(POPOVER_TESTID.start);
         await expect(startBtn).toBeEnabled({ timeout: 15_000 });
-        // NOSONAR: Force click is necessary for this e2e test
-        await startBtn.click({ force: true });
+        await startBtn.click();
         await expect(page.locator("pre", { hasText: "$ gc supervisor start" })).toBeVisible({ timeout: 15_000 });
 
         // Action console copy.

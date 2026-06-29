@@ -217,10 +217,7 @@ function StatusDot({
 }
 
 // Copy a string to the clipboard with a brief "copied!" confirmation.
-// Uses the navigator Clipboard API where available; falls back to a hidden
-// textarea + execCommand for older browsers (and the test browser context
-// where clipboard may not be granted). The fallback also works in headless
-// Chromium without permissions.
+// Uses the navigator Clipboard API. No fallback for older browsers.
 async function copyText(text: string, setFlag: (b: boolean) => void): Promise<void> {
   let ok = false;
   try {
@@ -233,24 +230,7 @@ async function copyText(text: string, setFlag: (b: boolean) => void): Promise<vo
       ok = true;
     }
   } catch {
-    // fall through to execCommand
-  }
-  if (!ok && typeof document !== "undefined") {
-    try {
-      const ta = document.createElement("textarea");
-      ta.value = text;
-      ta.style.position = "fixed";
-      ta.style.opacity = "0";
-      document.body.appendChild(ta);
-      ta.focus();
-      ta.select();
-      // NOSONAR: fallback for older browsers where Clipboard API is unavailable
-      ok = document.execCommand("copy");
-      ta.remove();
-    } catch {
-      // Both paths failed. The operator can still drag-select the pre block
-      // and Cmd+C — we just don't show "copied!".
-    }
+    // Clipboard API failed - no fallback for older browsers
   }
   if (ok) {
     setFlag(true);
