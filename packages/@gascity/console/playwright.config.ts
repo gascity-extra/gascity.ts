@@ -24,6 +24,7 @@
  *   bun run test:e2e:mock                          # mock supervisor flow
  */
 import { defineConfig, devices } from "@playwright/test";
+import { parsePort } from "./playwright-utils";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -32,23 +33,6 @@ const PORT = parsePort(process.env.E2E_PORT, 3000);
 const BASE_URL = process.env.E2E_BASE_URL ?? `http://localhost:${PORT}`;
 const SKIP_SCENARIOS = process.env.SKIP_E2E_SCENARIOS === "1";
 const GC_BACKEND = process.env.GC_API_BASE_URL ?? "http://127.0.0.1:8372";
-
-/**
- * Parse a positive integer port from an env var, falling back to a
- * default when unset. Treats empty strings and non-numeric values as
- * "unset" so a stray `E2E_PORT=` or `E2E_PORT=NaN` produces a clear
- * config error instead of silently building `http://localhost:NaN`.
- */
-function parsePort(raw: string | undefined, fallback: number): number {
-    if (raw === undefined || raw === "") return fallback;
-    const n = Number(raw);
-    if (!Number.isFinite(n) || !Number.isInteger(n) || n <= 0 || n > 65535) {
-        throw new Error(
-            `Invalid port value: ${JSON.stringify(raw)} (expected integer 1-65535)`,
-        );
-    }
-    return n;
-}
 
 export default defineConfig({
   testDir: "./e2e",

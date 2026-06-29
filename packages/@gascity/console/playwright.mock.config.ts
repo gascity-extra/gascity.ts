@@ -15,24 +15,7 @@
  */
 
 import { defineConfig, devices } from "@playwright/test";
-
-/**
- * Parse a positive integer port from an env var, falling back to a
- * default when unset. Treats empty strings and non-numeric values as
- * "unset" so a stray `MOCK_GC_PORT=` or `MOCK_E2E_PORT=NaN` produces a
- * clear config error instead of silently building
- * `http://127.0.0.1:NaN`.
- */
-function parsePort(raw: string | undefined, fallback: number): number {
-    if (raw === undefined || raw === "") return fallback;
-    const n = Number(raw);
-    if (!Number.isFinite(n) || !Number.isInteger(n) || n <= 0 || n > 65535) {
-        throw new Error(
-            `Invalid port value: ${JSON.stringify(raw)} (expected integer 1-65535)`,
-        );
-    }
-    return n;
-}
+import { parsePort } from "./playwright-utils";
 
 // Mock listens on 8780 by default — NOT 8372 — so it can never
 // silently shadow a real `gc` daemon on the operator's machine. The
@@ -40,7 +23,7 @@ function parsePort(raw: string | undefined, fallback: number): number {
 // to run without that opt-in flag.
 const MOCK_GC_PORT = parsePort(process.env.MOCK_GC_PORT, 8780);
 const GC_API_BASE_URL = `http://127.0.0.1:${MOCK_GC_PORT}`;
-const E2E_PORT = parsePort(process.env.MOCK_E2E_PORT, 3100);
+const E2E_PORT = parsePort(process.env.E2E_PORT, 3100);
 const BASE_URL = `http://localhost:${E2E_PORT}`;
 
 export default defineConfig({
