@@ -915,7 +915,8 @@ function parseSupervisorToml(text: string): {
 } {
   const result: { bind?: string; port?: number } = {}
   let currentSection: string | null = null
-  for (const rawLine of text.split(/\r?\n/)) {
+  const lines = text.split(/\r\n|\n/)
+  for (const rawLine of lines) {
     const line = rawLine.trim()
     if (shouldSkipLine(line)) continue
     currentSection = updateSection(line, currentSection)
@@ -1132,7 +1133,9 @@ function parseSlingOutput(stdout: string, stderr: string): SlingParseResult {
     /\b(bd-[a-z0-9]+)\b/i,
   ]
   for (const re of patterns) {
-    const m = stdout.match(re) || stderr.match(re)
+    const stdoutMatch = re.exec(stdout)
+    const stderrMatch = !stdoutMatch ? re.exec(stderr) : null
+    const m = stdoutMatch || stderrMatch
     if (m && m[1]) {
       return { output: `slung bead ${m[1]}`, bead_id: m[1] }
     }
@@ -2425,7 +2428,7 @@ function readmeUrlFor(source: string, ref: string | undefined, name: string): st
   const ghMatch = source.match(/^https?:\/\/github\.com\/([^/]+)\/([^/]+)(\/(.+))?$/)
   if (!ghMatch) return source
   const owner = ghMatch[1]
-  const repo = ghMatch[2].replace(/\.git$/, '')
+  const repo = ghMatch[2].replace(/\.git\//g, '').replace(/\.git$/, '')
   const subpath = ghMatch[4] ?? name
   // If the source is already in `tree/<ref>/<path>` form, prefer
   // that exact ref; otherwise use the provided ref or `main`.
@@ -2519,7 +2522,8 @@ export const gcListMarketplaceEntries = createServerFn({ method: 'GET' })
     const normSource = (s: string | undefined): string | undefined => {
       if (!s) return undefined
       return s
-        .replace(/\.git(\/|$)/g, '$1')
+        .replace(/\.git\//g, '')
+        .replace(/\.git$/, '')
         .replace(/\/+$/, '')
         .toLowerCase()
     }
@@ -3002,7 +3006,8 @@ function sourcesEqual(a: string | undefined, b: string | undefined): boolean {
   // `//subpath` separator — `gc import add` accepts both.
   const norm = (s: string) =>
     s
-      .replace(/\.git(\/|$)/g, '$1')
+      .replace(/\.git\//g, '')
+      .replace(/\.git$/, '')
       .replace(/\/+$/, '')
       .toLowerCase()
   return norm(a) === norm(b)

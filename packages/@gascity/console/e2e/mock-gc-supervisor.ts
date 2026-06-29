@@ -233,22 +233,26 @@ function getRouteHandler(route: string): ((req: IncomingMessage, res: ServerResp
     if (route === 'POST /v0/city') return handlePostCity
     if (route === 'GET /v0/events') return handleGetEvents
 
-    const unregisterMatch = route.match(/^POST \/v0\/city\/([^/]+)\/unregister$/)
+    const UNREGISTER_RE = /^POST \/v0\/city\/([^/]+)\/unregister$/
+    const unregisterMatch = UNREGISTER_RE.exec(route)
     if (unregisterMatch) {
         return (req, res, url) => handleUnregisterCity(req, res, unregisterMatch[1])
     }
 
-    const statusMatch = route.match(/^GET \/v0\/city\/([^/]+)\/status$/)
+    const STATUS_RE = /^GET \/v0\/city\/([^/]+)\/status$/
+    const statusMatch = STATUS_RE.exec(route)
     if (statusMatch) {
         return (req, res, url) => handleGetCityStatus(req, res, url, statusMatch[1])
     }
 
-    const healthMatch = route.match(/^GET \/v0\/city\/([^/]+)\/health$/)
+    const HEALTH_RE = /^GET \/v0\/city\/([^/]+)\/health$/
+    const healthMatch = HEALTH_RE.exec(route)
     if (healthMatch) {
         return (req, res, url) => handleGetCityHealth(req, res)
     }
 
-    const sessionsMatch = route.match(/^GET \/v0\/city\/([^/]+)\/sessions$/)
+    const SESSIONS_RE = /^GET \/v0\/city\/([^/]+)\/sessions$/
+    const sessionsMatch = SESSIONS_RE.exec(route)
     if (sessionsMatch) {
         return (req, res, url) => handleGetCitySessionsList(req, res, sessionsMatch[1])
     }

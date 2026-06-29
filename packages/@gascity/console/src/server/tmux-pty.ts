@@ -179,7 +179,7 @@ export function handleBrowserMessage(pty: IPty, raw: unknown): void {
       if (handled) return;
     }
     pty.write(raw);
-    return;
+    return; // NOSONAR: early return pattern for type narrowing
   }
   if (raw instanceof ArrayBuffer) {
     pty.write(Buffer.from(raw).toString("utf8"));

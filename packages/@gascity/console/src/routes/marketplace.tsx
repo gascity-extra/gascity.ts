@@ -1006,10 +1006,10 @@ function InstalledCard({
 function PackDetails({
   entry,
   onClose,
-}: {
+}: Readonly<{
   entry: MarketplaceEntry
   onClose: () => void
-}) {
+}>) {
   return (
     <>
       <DialogHeader>
