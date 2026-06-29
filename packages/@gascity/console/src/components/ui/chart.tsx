@@ -109,7 +109,6 @@ const ChartTooltip = RechartsPrimitive.Tooltip;
  * tooltip payload type is intentionally loose — only the fields we actually
  * read are typed here.
  */
-type ChartTooltipPayloadItem = TooltipItem;
 
 const ChartTooltipContent = React.forwardRef<
   HTMLDivElement,

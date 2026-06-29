@@ -168,7 +168,7 @@ function handleKeyValue(
 function handleTopLevelKey(key: string, value: unknown, doc: RegistryDocument, lineIndex: number): void {
   if (key === 'schema') {
     if (typeof value !== 'number') {
-      throw new Error(`registry.toml line ${lineIndex + 1}: schema must be a number`)
+      throw new TypeError(`registry.toml line ${lineIndex + 1}: schema must be a number`)
     }
     doc.schema = value
   }

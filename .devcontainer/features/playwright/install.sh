@@ -28,7 +28,7 @@ install_pkgs() {
             echo "WARN: ${pkg} (and ${pkg}t64) not in repos, skipping"
         fi
     done
-    if [ ${#pkgs[@]} -gt 0 ]; then
+    if [[ ${#pkgs[@]} -gt 0 ]]; then
         apt-get install -y "${pkgs[@]}"
     fi
 }

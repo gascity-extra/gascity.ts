@@ -8,11 +8,9 @@ BUN_INSTALL="$HOME/.bun"
 export PATH="$BUN_INSTALL/bin:$PATH"
 
 # Add to .bashrc if it exists
-if [ -f "$HOME/.bashrc" ]; then
-    if ! grep -q 'export BUN_INSTALL="$HOME/.bun"' "$HOME/.bashrc"; then
-        echo 'export BUN_INSTALL="$HOME/.bun"' >> "$HOME/.bashrc"
-        echo 'export PATH="$BUN_INSTALL/bin:$PATH"' >> "$HOME/.bashrc"
-    fi
+if [[ -f "$HOME/.bashrc" ]] && ! grep -q 'export BUN_INSTALL="$HOME/.bun"' "$HOME/.bashrc"; then
+    echo 'export BUN_INSTALL="$HOME/.bun"' >> "$HOME/.bashrc"
+    echo 'export PATH="$BUN_INSTALL/bin:$PATH"' >> "$HOME/.bashrc"
 fi
 
 # Add to .zshrc if it exists

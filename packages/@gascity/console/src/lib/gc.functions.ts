@@ -2136,7 +2136,8 @@ export const gcCityInitWithPacks = createServerFn({ method: 'POST' })
       skipCity: true,
     })
     if (cliResult.ok) {
-      const derivedName = data.path.split(/[/\\]/).filter(Boolean).pop() ?? 'default'
+      const pathSegments = data.path.split(/[/\\]/).filter(Boolean)
+      const derivedName = pathSegments.at(-1) ?? 'default'
       return {
         output: `${initOutput}${rigOutput}\ncity "${derivedName}" registered + started`,
         ok: initResult.ok,
