@@ -10,10 +10,9 @@
     "strict": true,
     "baseUrl": ".",
     "paths": {
-      "@/*": ["./src/*"],
-      "@/server/*": ["./server/*"]
+      "@/*": ["./src/*"]
     }
   },
-  "include": ["src/**/*", "vite/**/*", "server/**/*", "vite.config.ts"],
+  "include": ["src/**/*", "vite/**/*", "vite.config.ts"],
   "exclude": ["node_modules", "dist", "e2e", "test-results"]
 }

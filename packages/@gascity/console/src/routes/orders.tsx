@@ -10,7 +10,7 @@ import {
   gcOrderRun,
   gcOrderSetEnabled,
   gcOrderShow,
-} from "@/../server/gc.functions.internal";
+} from "@/lib/gc.functions";
 
 export const Route = createFileRoute("/orders")({
   head: () => ({ meta: [{ title: "Orders — gc console" }] }),

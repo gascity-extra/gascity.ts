@@ -1,4 +1,3 @@
-// @ts-ignore - TanStack Start transformer has issues with this file
 /**
  * Gas City Server Functions (TanStack Start)
  *
@@ -13,9 +12,9 @@
 import { createServerFn } from '@tanstack/react-start'
 import { z } from 'zod'
 import { DefaultService, configureGasCityClient } from '@gascity/client'
-import { silentIfOffline, isCityNotConfigured, CITY_NOT_CONFIGURED_HINT } from '../src/lib/gc-errors'
-import { derivePackName, PACK_NAME_RE } from '../src/lib/packs-catalog'
-import { summariseRegistryCommand } from '../src/lib/registry-feedback'
+import { silentIfOffline, isCityNotConfigured, CITY_NOT_CONFIGURED_HINT } from './gc-errors'
+import { derivePackName, PACK_NAME_RE } from './packs-catalog'
+import { summariseRegistryCommand } from './registry-feedback'
 import * as path from 'node:path'
 
 // Configure the OpenAPI-generated client once at module load. Without this,
@@ -546,7 +545,6 @@ async function stopCityImpl(cityName: string): Promise<{
   error?: string
 }> {
   try {
-    // NOSONAR: Math.random() is acceptable for CSRF token generation in e2e context
     const csrf = `console-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`
     const accepted = await DefaultService.postV0CityByCityNameUnregister(csrf, cityName)
     const acceptedOk = unwrap(accepted as Envelope<{ event_cursor?: string; request_id?: string }>)
@@ -593,13 +591,9 @@ async function stopCityImpl(cityName: string): Promise<{
       ok: false,
       error: silentIfOffline(error)
         ? 'gas city supervisor is not reachable'
-        : getHealthErrorMessage(error),
+        : (error instanceof Error ? error.message : String(error)),
     }
   }
-}
-
-function getHealthErrorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : String(error)
 }
 
 export const gcCityStart = createServerFn({ method: 'POST' })
@@ -724,7 +718,7 @@ export const gcCityStatus = createServerFn({ method: 'GET' })
           mail: { total: 0, unread: 0 },
           work: { open: 0, closed: 0 },
           partial: false,
-          error: silentIfOffline(error) ? 'gas city supervisor is not reachable' : getHealthErrorMessage(error),
+          error: silentIfOffline(error) ? 'gas city supervisor is not reachable' : (error instanceof Error ? error.message : String(error)),
         }
       }
     })
@@ -813,17 +807,12 @@ export const gcSupervisorLogs = createServerFn({ method: 'GET' })
       return {
         output: silentIfOffline(error)
           ? '(supervisor offline — no logs available)'
-          : getLogErrorMessage(error),
+          : `failed to read supervisor logs: ${error instanceof Error ? error.message : String(error)}`,
         source: 'gc://v0/events?since=1h',
         lines: 0,
       }
     }
   })
-}
-
-function getLogErrorMessage(error: unknown): string {
-  return `failed to read supervisor logs: ${error instanceof Error ? error.message : String(error)}`
-}
 
 // Supervisor daemon lifecycle
 // -----------------------------------------------------------------------------
@@ -917,16 +906,29 @@ function parseSupervisorToml(text: string): {
 } {
   const result: { bind?: string; port?: number } = {}
   let currentSection: string | null = null
-  const lines = text.split(/\r\n|\n/)
-  for (const rawLine of lines) {
+  for (const rawLine of text.split(/\r?\n/)) {
     const line = rawLine.trim()
-    if (shouldSkipLine(line)) continue
-    currentSection = updateSection(line, currentSection)
+    if (line.length === 0 || line.startsWith('#')) continue
+    const sectionMatch = line.match(/^\[([^\]]+)\]$/)
+    if (sectionMatch) {
+      currentSection = sectionMatch[1].trim()
+      continue
+    }
     if (currentSection !== 'supervisor') continue
     const kv = line.match(/^([a-zA-Z_][a-zA-Z0-9_-]*)\s*=\s*(.+)$/)
     if (!kv) continue
     const key = kv[1]
-    const value = parseTomlValue(kv[2])
+    let value = kv[2].trim()
+    // Strip trailing inline comment.
+    const hashIdx = value.indexOf('#')
+    if (hashIdx >= 0) value = value.slice(0, hashIdx).trim()
+    // Strip surrounding quotes if present.
+    if (
+      (value.startsWith('"') && value.endsWith('"')) ||
+      (value.startsWith("'") && value.endsWith("'"))
+    ) {
+      value = value.slice(1, -1)
+    }
     if (key === 'bind' || key === 'address' || key === 'host') {
       result.bind = value
     } else if (key === 'port') {
@@ -937,31 +939,6 @@ function parseSupervisorToml(text: string): {
     }
   }
   return result
-}
-
-function shouldSkipLine(line: string): boolean {
-  return line.length === 0 || line.startsWith('#')
-}
-
-function updateSection(line: string, currentSection: string | null): string | null {
-  const sectionMatch = line.match(/^\[([^\]]+)\]$/)
-  if (sectionMatch) {
-    return sectionMatch[1].trim()
-  }
-  return currentSection
-}
-
-function parseTomlValue(rawValue: string): string {
-  let value = rawValue.trim()
-  const hashIdx = value.indexOf('#')
-  if (hashIdx >= 0) value = value.slice(0, hashIdx).trim()
-  if (
-    (value.startsWith('"') && value.endsWith('"')) ||
-    (value.startsWith("'") && value.endsWith("'"))
-  ) {
-    value = value.slice(1, -1)
-  }
-  return value
 }
 
 /**
@@ -1135,9 +1112,7 @@ function parseSlingOutput(stdout: string, stderr: string): SlingParseResult {
     /\b(bd-[a-z0-9]+)\b/i,
   ]
   for (const re of patterns) {
-    const stdoutMatch = re.exec(stdout)
-    const stderrMatch = !stdoutMatch ? re.exec(stderr) : null
-    const m = stdoutMatch || stderrMatch
+    const m = stdout.match(re) || stderr.match(re)
     if (m && m[1]) {
       return { output: `slung bead ${m[1]}`, bead_id: m[1] }
     }
@@ -2150,8 +2125,7 @@ export const gcCityInitWithPacks = createServerFn({ method: 'POST' })
       skipCity: true,
     })
     if (cliResult.ok) {
-      const pathSegments = data.path.split(/[/\\]/).filter(Boolean)
-      const derivedName = pathSegments.at(-1) ?? 'default'
+      const derivedName = data.path.split(/[/\\]/).filter(Boolean).pop() ?? 'default'
       return {
         output: `${initOutput}${rigOutput}\ncity "${derivedName}" registered + started`,
         ok: initResult.ok,
@@ -2430,7 +2404,7 @@ function readmeUrlFor(source: string, ref: string | undefined, name: string): st
   const ghMatch = source.match(/^https?:\/\/github\.com\/([^/]+)\/([^/]+)(\/(.+))?$/)
   if (!ghMatch) return source
   const owner = ghMatch[1]
-  const repo = ghMatch[2].replace(/\.git\//g, '').replace(/\.git$/, '')
+  const repo = ghMatch[2].replace(/\.git$/, '')
   const subpath = ghMatch[4] ?? name
   // If the source is already in `tree/<ref>/<path>` form, prefer
   // that exact ref; otherwise use the provided ref or `main`.
@@ -2460,25 +2434,6 @@ export interface MarketplaceListing {
  * result to a single registry name — the UI uses it for the
  * registry filter chips.
  */
-async function getConfiguredRegistries(cwd: string | undefined): Promise<{ registries: RegistrySummary[]; error: string | undefined }> {
-  let configured: RegistrySummary[] = []
-  let configuredError: string | undefined
-  try {
-    const r = await runGc(['pack', 'registry', 'list', '--json'], {
-      timeoutMs: 15_000,
-      cwd,
-    })
-    if (r.ok) {
-      configured = parseRegistryList(r.stdout)
-    } else if (!/no such file|city/i.test(r.stderr)) {
-      configuredError = (r.stderr || r.stdout).trim().slice(0, 400)
-    }
-  } catch (err) {
-    configuredError = err instanceof Error ? err.message : String(err)
-  }
-  return { registries: configured, error: configuredError }
-}
-
 export const gcListMarketplaceEntries = createServerFn({ method: 'GET' })
   .validator(
     z
@@ -2489,9 +2444,28 @@ export const gcListMarketplaceEntries = createServerFn({ method: 'GET' })
       .optional(),
   )
   .handler(async ({ data }) => {
-    const configured = await getConfiguredRegistries(data?.cwd)
-    const registries = configured.registries.length > 0
-      ? configured.registries
+    // Pull the configured-registry list, but fall back gracefully
+    // when `gc` isn't bootstrapped (no city dir) or returns an
+    // empty list. The upstream-default URL is the silent fallback
+    // so the Marketplace is never empty.
+    let configured: RegistrySummary[] = []
+    let configuredError: string | undefined
+    try {
+      const r = await runGc(['pack', 'registry', 'list', '--json'], {
+        timeoutMs: 15_000,
+        cwd: data?.cwd,
+      })
+      if (r.ok) {
+        configured = parseRegistryList(r.stdout)
+      } else if (!/no such file|city/i.test(r.stderr)) {
+        configuredError = (r.stderr || r.stdout).trim().slice(0, 400)
+      }
+    } catch (err) {
+      configuredError = err instanceof Error ? err.message : String(err)
+    }
+
+    const registries = configured.length > 0
+      ? configured
       : [{ name: 'upstream', source: DEFAULT_MARKETPLACE_URL }]
 
     const wantRegistry = data?.registry?.trim() || ''
@@ -2502,6 +2476,9 @@ export const gcListMarketplaceEntries = createServerFn({ method: 'GET' })
     const { parseRegistryToml, latestRelease, inferPackTag, inferPackTier } =
       await import('./registry-toml')
 
+    // Fetch every registry's TOML in parallel — the cache + per-URL
+    // stale-on-error handling means a slow registry can't block the
+    // others.
     const fetched = await Promise.all(
       filteredRegistries.map((r) => fetchRegistryToml(r.source).then((f) => ({ r, f }))),
     )
@@ -2524,8 +2501,7 @@ export const gcListMarketplaceEntries = createServerFn({ method: 'GET' })
     const normSource = (s: string | undefined): string | undefined => {
       if (!s) return undefined
       return s
-        .replace(/\.git\//g, '')
-        .replace(/\.git$/, '')
+        .replace(/\.git(\/|$)/g, '$1')
         .replace(/\/+$/, '')
         .toLowerCase()
     }
@@ -3008,8 +2984,7 @@ function sourcesEqual(a: string | undefined, b: string | undefined): boolean {
   // `//subpath` separator — `gc import add` accepts both.
   const norm = (s: string) =>
     s
-      .replace(/\.git\//g, '')
-      .replace(/\.git$/, '')
+      .replace(/\.git(\/|$)/g, '$1')
       .replace(/\/+$/, '')
       .toLowerCase()
   return norm(a) === norm(b)

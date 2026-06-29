@@ -8,7 +8,7 @@ import {
   gcSessionNudge,
   gcSessionReset,
   gcTmuxStatus,
-} from "@/../server/gc.functions.internal";
+} from "@/lib/gc.functions";
 
 function relTime(iso?: string) {
   if (!iso) return "—";

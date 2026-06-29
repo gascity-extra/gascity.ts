@@ -10,7 +10,7 @@ import {
   gcListCities,
   gcRepairPortMirror,
   gcRigEndpoints,
-} from "@/../server/gc.functions.internal";
+} from "@/lib/gc.functions";
 
 export const Route = createFileRoute("/endpoints")({
   head: () => ({ meta: [{ title: "Endpoints — gc console" }] }),
