@@ -701,11 +701,11 @@ function BrowseCard({
   onUninstall,
   onOpenDetails,
 }: {
-  entry: MarketplaceEntry
-  isPending: boolean
-  onInstall: () => void
-  onUninstall: () => void
-  onOpenDetails: () => void
+  readonly entry: MarketplaceEntry
+  readonly isPending: boolean
+  readonly onInstall: () => void
+  readonly onUninstall: () => void
+  readonly onOpenDetails: () => void
 }) {
   const tagLabel = TAG_LABELS[entry.tag] ?? entry.tag
   return (

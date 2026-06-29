@@ -175,9 +175,9 @@ function TmuxBadge({
   version,
   bin,
 }: {
-  available: boolean;
-  version?: string;
-  bin?: string;
+  readonly available: boolean;
+  readonly version?: string;
+  readonly bin?: string;
 }) {
   return (
     <span

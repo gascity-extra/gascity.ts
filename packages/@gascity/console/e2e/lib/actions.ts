@@ -865,7 +865,7 @@ export class E2EActions {
       const beads = await this.getBeadList('closed');
       for (const b of beads) {
         const text = await b.textContent();
-        if (text && text.includes(beadId)) return true;
+        if (text?.includes(beadId)) return true;
       }
       return false;
     }, timeout);

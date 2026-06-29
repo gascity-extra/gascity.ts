@@ -15,7 +15,6 @@ import { DefaultService, configureGasCityClient } from '@gascity/client'
 import { silentIfOffline, isCityNotConfigured, CITY_NOT_CONFIGURED_HINT } from './gc-errors'
 import { derivePackName, PACK_NAME_RE } from './packs-catalog'
 import { summariseRegistryCommand } from './registry-feedback'
-import * as nodePath from 'node:path'
 import * as path from 'node:path'
 
 // Configure the OpenAPI-generated client once at module load. Without this,
