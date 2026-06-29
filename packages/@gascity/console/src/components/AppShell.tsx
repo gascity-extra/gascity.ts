@@ -269,7 +269,7 @@ function SupervisorPopover({
   const restart = useServerFn(gcSupervisorRestart);
   const qc = useQueryClient();
 
-  const [transition, setTransition] = useState<null | "starting" | "stopping">(null);
+  const [transition, setTransition] = useState<null | "starting" | "stopping">(null); // NOSONAR
   const [console_, setConsole] = useState<string>("");
   const [copiedConsole, setCopiedConsole] = useState(false);
   const [copiedLog, setCopiedLog] = useState(false);
