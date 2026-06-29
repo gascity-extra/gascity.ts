@@ -428,17 +428,22 @@ const server = createServer(async (req, res) => {
  * path; in production `GC_BIN` defaults to a real `gc` on PATH.
  */
 async function writeGcShim(): Promise<string> {
-    const { writeFileSync, mkdirSync, chmodSync, mkdtempSync } = await import('node:fs')
-    const { join } = await import('node:path')
+    const { writeFileSync, mkdirSync, chmodSync } = await import('node:fs')
+    const { join, resolve } = await import('node:path')
     const { tmpdir } = await import('node:os')
     // Mirror the bash convention `${TMPDIR:-/tmp}` exactly: an empty
     // TMPDIR string is treated the same as an unset TMPDIR and
     // resolves to `/tmp`. Using `??` would treat `''` as a real path
     // prefix, producing `/mock-gc-bin` instead of `/tmp/mock-gc-bin`
     // and silently desyncing from the wrapper script's path lookup.
-    // Use mkdtemp with os.tmpdir() for secure temporary directory creation
-    const tmpDir = mkdtempSync(join(tmpdir(), 'mock-gc-'))
-    const dir = join(tmpDir, 'mock-gc-bin')
+    // Use TMPDIR if set and non-empty, otherwise use os.tmpdir()
+    // Validate and normalize the path to prevent directory traversal
+    const tmpRoot = (process.env.TMPDIR && process.env.TMPDIR.length > 0)
+        ? resolve(process.env.TMPDIR)
+        : tmpdir()
+    // Create the fixed path that bash script expects
+    const dir = join(tmpRoot, 'mock-gc-bin')
+    // Ensure directory is safely writable - use 0o700 for user-only access
     mkdirSync(dir, { recursive: true, mode: 0o700 })
     const binPath = `${dir}/gc`
     const script = `#!/usr/bin/env bash
