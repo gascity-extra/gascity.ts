@@ -236,7 +236,7 @@ function MarketplacePage() {
   const tagsInUse = useMemo(() => {
     const set = new Set<string>()
     for (const e of entries) set.add(e.tag)
-    return Array.from(set).sort()
+    return Array.from(set).sort((a, b) => a.localeCompare(b))
   }, [entries])
 
   const filtered = useMemo(() => {

@@ -266,6 +266,7 @@ test.describe("supervisor panel lifecycle (mock)", () => {
         // content).
         const startBtn = page.getByTestId(POPOVER_TESTID.start);
         await expect(startBtn).toBeEnabled({ timeout: 15_000 });
+        // NOSONAR: force click needed for e2e test reliability
         await startBtn.click({ force: true });
         await expect(page.locator("pre", { hasText: "$ gc supervisor start" })).toBeVisible({ timeout: 15_000 });
 
