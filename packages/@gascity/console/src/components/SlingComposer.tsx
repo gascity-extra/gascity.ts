@@ -2,7 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { useEffect, useRef, useState } from "react";
 
-import { gcListAgents, gcListCities, gcSling } from "@/../server/gc.functions";
+import { gcListAgents, gcListCities, gcSling } from "@/server/gc.functions.internal";
 
 export function SlingComposer({ onDone }: { onDone?: () => void }) {
   const listCities = useServerFn(gcListCities);

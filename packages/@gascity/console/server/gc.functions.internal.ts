@@ -13,9 +13,9 @@
 import { createServerFn } from '@tanstack/react-start'
 import { z } from 'zod'
 import { DefaultService, configureGasCityClient } from '@gascity/client'
-import { silentIfOffline, isCityNotConfigured, CITY_NOT_CONFIGURED_HINT } from './gc-errors'
-import { derivePackName, PACK_NAME_RE } from './packs-catalog'
-import { summariseRegistryCommand } from './registry-feedback'
+import { silentIfOffline, isCityNotConfigured, CITY_NOT_CONFIGURED_HINT } from '../src/lib/gc-errors'
+import { derivePackName, PACK_NAME_RE } from '../src/lib/packs-catalog'
+import { summariseRegistryCommand } from '../src/lib/registry-feedback'
 import * as path from 'node:path'
 
 // Configure the OpenAPI-generated client once at module load. Without this,
