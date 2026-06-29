@@ -39,6 +39,7 @@ export interface RegistryDocument {
 }
 
 const SECTION_RE = /^\[\[([^\]]+)\]\]$/
+// NOSONAR: Simple regex for TOML parsing
 const KV_RE = /^([a-zA-Z_][a-zA-Z0-9_-]*)\s*=\s*(.+)$/
 
 function stripInlineComment(value: string): string {

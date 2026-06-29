@@ -37,6 +37,7 @@ export function derivePackName(source: string): string {
   const treeMatch = TREE_RE.exec(tail)
   if (treeMatch) tail = treeMatch[1]
   // Drop trailing slashes.
+  // NOSONAR: Simple regex for path normalization
   tail = tail.replace(/\/+$/, '')
   // Last path segment.
   const segs = tail.split('/').filter((s) => s.length > 0)

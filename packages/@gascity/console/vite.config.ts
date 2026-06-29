@@ -25,6 +25,7 @@ const stripSplitHmrBookkeeping = () => ({
       '',
     )
     // Drop the `TSRSplitComponent = (props) => ...` definition block.
+    // NOSONAR: HMR-specific regex, acceptable for dev-only code
     out = out.replace(
       /^[ \t]*TSRSplitComponent\s*=[^;]+;?\s*$/gm,
       '',

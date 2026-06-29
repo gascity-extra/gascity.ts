@@ -21,7 +21,10 @@ function baseUrl(): string {
 }
 
 function authHeaders(incomingToken?: string): Record<string, string> {
-  const token = incomingToken || (typeof process !== "undefined" ? process.env?.GC_API_TOKEN : undefined);
+  let token = incomingToken;
+  if (!token && typeof process !== "undefined") {
+    token = process.env?.GC_API_TOKEN;
+  }
   return token ? { Authorization: `Bearer ${token}` } : {};
 }
 
