@@ -442,8 +442,7 @@ async function handleGetCitySessionsList(req: IncomingMessage, res: ServerRespon
  */
 async function writeGcShim(): Promise<string> {
     const { writeFileSync, mkdirSync, chmodSync } = await import('node:fs')
-    const { join, resolve } = await import('node:path')
-    const { tmpdir } = await import('node:os')
+    const { join } = await import('node:path')
     // Mirror the bash convention `${TMPDIR:-/tmp}` exactly: an empty
     // TMPDIR string is treated the same as an unset TMPDIR and
     // resolves to `/tmp`. Using `??` would treat `''` as a real path
