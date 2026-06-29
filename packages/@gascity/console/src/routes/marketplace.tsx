@@ -140,12 +140,12 @@ function MarketplacePage() {
   const uninstallMut = useMutation({
     mutationFn: (name: string) => uninstallFn({ data: { name } }),
     onSuccess: (r: { ok: boolean; output: string; error?: string }) => {
-      if (!r.ok) {
-        setGlobalError(r.error ?? r.output ?? "uninstall failed")
-      } else {
+      if (r.ok) {
         setGlobalError(null)
         setFeedback(r.output)
         invalidateAll()
+      } else {
+        setGlobalError(r.error ?? r.output ?? "uninstall failed")
       }
     },
     onError: (e) => setGlobalError(e instanceof Error ? e.message : String(e)),
@@ -155,15 +155,15 @@ function MarketplacePage() {
     mutationFn: (input: { name: string; source: string }) =>
       addRegistryFn({ data: input }),
     onSuccess: (r: { ok: boolean; output: string; error?: string }) => {
-      if (!r.ok) {
-        setGlobalError(r.error ?? r.output ?? "add registry failed")
-      } else {
+      if (r.ok) {
         setGlobalError(null)
         setFeedback(r.output)
         setNewRegistryName("")
         setNewRegistrySource("")
         setRegistryFormOpen(false)
         invalidateAll()
+      } else {
+        setGlobalError(r.error ?? r.output ?? "add registry failed")
       }
     },
     onError: (e) => setGlobalError(e instanceof Error ? e.message : String(e)),
