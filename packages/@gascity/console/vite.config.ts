@@ -37,6 +37,7 @@ export default defineConfig({
     tanstackRouter({
       target: 'react',
       autoCodeSplitting: true,
+      routesDirectory: './src/routes',
       codeSplittingOptions: {
         // Suppress the code-splitter's route-HMR statement insertion
         // (the `const hot = import.meta.hot` block it appends to every
