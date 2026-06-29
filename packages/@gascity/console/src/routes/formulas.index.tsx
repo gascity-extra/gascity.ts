@@ -3,7 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 
 import { AppShell } from "@/components/AppShell";
-import { gcListFormulas } from "@/lib/gc.functions";
+import { gcListFormulas } from "@/server/gc.functions";
 
 export const Route = createFileRoute("/formulas/")({
   head: () => ({ meta: [{ title: "Formulas — gc console" }] }),

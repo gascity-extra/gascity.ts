@@ -12,7 +12,7 @@ import {
   gcCityStop,
   gcListCities,
   gcListPacks,
-} from "@/lib/gc.functions";
+} from "@/server/gc.functions";
 
 export const Route = createFileRoute("/cities")({
   head: () => ({ meta: [{ title: "Cities — gc console" }] }),

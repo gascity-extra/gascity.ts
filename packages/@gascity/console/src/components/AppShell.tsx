@@ -13,7 +13,7 @@ import {
   gcSupervisorStart,
   gcSupervisorStop,
   gcVersion,
-} from "@/lib/gc.functions";
+} from "@/server/gc.functions";
 
 const NAV = [
   { to: "/", label: "Sessions", key: "s" },

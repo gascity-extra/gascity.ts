@@ -3,7 +3,7 @@ import { Link } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { useQuery } from "@tanstack/react-query";
 
-import { gcSessionPeek } from "@/lib/gc.functions";
+import { gcSessionPeek } from "@/server/gc.functions";
 
 export function SessionTerminal({ name }: { name: string }) {
   const containerRef = useRef<HTMLDivElement>(null);
