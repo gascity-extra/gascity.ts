@@ -4,9 +4,7 @@
 
 import { DefaultService, configureGasCityClient } from '@gascity/client'
 import { silentIfOffline, isCityNotConfigured, CITY_NOT_CONFIGURED_HINT } from './gc-errors'
-import { derivePackName, PACK_NAME_RE } from './packs-catalog'
 import { summariseRegistryCommand } from './registry-feedback'
-import * as path from 'node:path'
 
 // Configure the OpenAPI-generated client once at module load. Without this,
 // `DefaultService.*` calls hit `axios` with an empty `BASE`, which throws
@@ -19,7 +17,7 @@ configureGasCityClient({
   baseUrl:
     (typeof process !== 'undefined' && process.env?.GC_API_BASE_URL?.replace(/\/$/, '')) ||
     'http://127.0.0.1:8372',
-  token: typeof process !== 'undefined' ? process.env?.GC_API_TOKEN : undefined,
+  token: typeof process !== 'undefined' && process.env?.GC_API_TOKEN ? process.env.GC_API_TOKEN : undefined,
 })
 
 export const CITY = 'default'
