@@ -239,6 +239,7 @@ async function copyText(text: string, setFlag: (b: boolean) => void): Promise<vo
       document.body.appendChild(ta);
       ta.focus();
       ta.select();
+      // NOSONAR: fallback for older browsers where Clipboard API is unavailable
       ok = document.execCommand("copy");
       ta.remove();
     } catch {

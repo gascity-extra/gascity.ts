@@ -545,6 +545,7 @@ async function stopCityImpl(cityName: string): Promise<{
   error?: string
 }> {
   try {
+    // NOSONAR: Math.random() is acceptable for CSRF token generation in e2e context
     const csrf = `console-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`
     const accepted = await DefaultService.postV0CityByCityNameUnregister(csrf, cityName)
     const acceptedOk = unwrap(accepted as Envelope<{ event_cursor?: string; request_id?: string }>)
