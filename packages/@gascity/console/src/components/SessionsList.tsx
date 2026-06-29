@@ -198,7 +198,7 @@ function TmuxBadge({
           "inline-block h-1.5 w-1.5 rounded-full",
           available ? "bg-emerald-500" : "bg-muted-foreground",
         )}
-      />
+      />{" "}
       tmux
     </span>
   );
