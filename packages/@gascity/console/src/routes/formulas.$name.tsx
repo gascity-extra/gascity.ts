@@ -166,14 +166,12 @@ function FormulaDetail() {
 
 function StepStatusDot({ status }: { status?: string }) {
   const s = (status ?? "").toLowerCase();
-  const cls =
-    s === "closed" || s === "done"
-      ? "bg-foreground"
-      : s === "in_progress" || s === "running"
-        ? "live-dot"
-        : s === "blocked" || s === "failed"
-          ? "bg-destructive"
-          : "bg-border";
+  const cls = (() => {
+    if (s === "closed" || s === "done") return "bg-foreground"
+    if (s === "in_progress" || s === "running") return "live-dot"
+    if (s === "blocked" || s === "failed") return "bg-destructive"
+    return "bg-border"
+  })();
   return <span className={clsx("inline-block h-1.5 w-1.5 rounded-full", cls)} />;
 }
 

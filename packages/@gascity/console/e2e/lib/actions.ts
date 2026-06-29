@@ -1,4 +1,4 @@
-import { Page, Locator, expect } from '@playwright/test';
+import { Page, expect } from '@playwright/test';
 
 /**
  * Resolve the test runner's base URL for absolute navigation. Falls back to
@@ -280,8 +280,8 @@ export class E2EActions {
       let agentToUse = agentName;
       let agentFound = false;
 
-      for (let i = 0; i < agentOptions.length; i++) {
-        const optText = await agentOptions[i].textContent();
+      for (const agentOption of agentOptions) {
+        const optText = await agentOption.textContent();
         if (optText === agentName && optText !== 'choose…') {
           agentFound = true;
           break;
@@ -319,7 +319,7 @@ export class E2EActions {
    * This bypasses the UI and calls gc CLI directly
    */
   async slingTaskViaCLI(agent: string, text: string): Promise<{ ok: boolean; bead_id?: string; output: string }> {
-    const { exec } = await import('child_process');
+    const { exec } = await import('node:child_process');
 
     return new Promise((resolve) => {
       // Run from the workspace directory to ensure gc can find the city

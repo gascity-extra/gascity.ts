@@ -140,13 +140,12 @@ function MailPage() {
             />
             <div className="flex items-center justify-between border-t border-border px-6 py-2">
               <span className="font-mono text-[11px] text-muted-foreground">
-                {sendMut.isPending
-                  ? "sending…"
-                  : sendMut.data?.error
-                    ? <span className="text-destructive">{sendMut.data.error}</span>
-                    : sendMut.data?.ok
-                      ? `sent ${sendMut.data.id ?? ""}`
-                      : "gc mail send"}
+                {(() => {
+                  if (sendMut.isPending) return "sending…"
+                  if (sendMut.data?.error) return <span className="text-destructive">{sendMut.data.error}</span>
+                  if (sendMut.data?.ok) return `sent ${sendMut.data.id ?? ""}`
+                  return "gc mail send"
+                })()}
               </span>
               <button
                 onClick={submit}

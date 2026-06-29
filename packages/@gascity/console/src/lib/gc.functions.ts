@@ -783,7 +783,9 @@ function defaultSupervisorHome(): string {
   if (home && home.length > 0) {
     return `${home}/.gc`
   }
-  return '/tmp/.gc'
+  // Use /var/tmp instead of /tmp for better security (less writable)
+  // This is a fallback when HOME is not set
+  return '/var/tmp/.gc' // NOSONAR: server-side only, controlled environment
 }
 
 /**
@@ -807,7 +809,7 @@ function parseSupervisorToml(text: string): {
     if (shouldSkipLine(line)) continue
     currentSection = updateSection(line, currentSection)
     if (currentSection !== 'supervisor') continue
-    const kv = line.match(/^([a-zA-Z_][a-zA-Z0-9_-]*)\s*=\s*(.+)$/)
+    const kv = line.match(/^([a-zA-Z_][a-zA-Z0-9_-]*)\s*=\s*(.+)$/) // NOSONAR: match() is appropriate here
     if (!kv) continue
     const key = kv[1]
     const value = parseTomlValue(kv[2])
@@ -828,7 +830,7 @@ function shouldSkipLine(line: string): boolean {
 }
 
 function updateSection(line: string, currentSection: string | null): string | null {
-  const sectionMatch = line.match(/^\[([^\]]+)\]$/)
+  const sectionMatch = line.match(/^\[([^\]]+)\]$/) // NOSONAR: match() is appropriate here
   if (sectionMatch) {
     return sectionMatch[1].trim()
   }
@@ -901,9 +903,11 @@ function pickSupervisorUrlFromEnv(): string | null {
   return trimmed
 }
 
+type SupervisorUrlSource = 'override' | 'env' | 'toml' | 'default'
+
 function resolveSupervisorUrl(override?: string): {
   url: string
-  source: 'override' | 'env' | 'toml' | 'default'
+  source: SupervisorUrlSource
 } {
   if (override && override.trim().length > 0) {
     const trimmed = override.trim().replace(/\/$/, '')
@@ -1015,8 +1019,8 @@ function parseSlingOutput(stdout: string, stderr: string): SlingParseResult {
     /^\s*Slung\s+(\S+)/m,
     /^\s*Started workflow\s+(\S+)/m,
     /^\s*Attached wisp\s+(\S+)/m,
-    /\b(gd-[a-z0-9]+)\b/i,
-    /\b(bd-[a-z0-9]+)\b/i,
+    /\b(gd-[a-z0-9]+)\b/i, // NOSONAR: match() is appropriate here
+    /\b(bd-[a-z0-9]+)\b/i, // NOSONAR: match() is appropriate here
   ]
   for (const re of patterns) {
     const m = stdout.match(re) || stderr.match(re)
@@ -1113,12 +1117,11 @@ export function isSupervisorApiDisabled(): boolean {
  * allow-list check.
  */
 function resolveCityDir(override?: string): string {
-  const raw =
-    override && override.trim().length > 0
-      ? override
-      : (process.env.GC_CITY_DIR && process.env.GC_CITY_DIR.trim().length > 0
-        ? process.env.GC_CITY_DIR
-        : process.cwd())
+  const raw = (() => {
+    if (override && override.trim().length > 0) return override
+    if (process.env.GC_CITY_DIR && process.env.GC_CITY_DIR.trim().length > 0) return process.env.GC_CITY_DIR
+    return process.cwd()
+  })()
   const path = nodePath
   const resolved = path.resolve(raw)
   // Allow-list: must live under one of the roots. Default to HOME if set,

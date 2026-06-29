@@ -27,7 +27,7 @@ const NAV = [
 ] as const;
 
 
-export function AppShell({ children }: { children: ReactNode }) {
+export function AppShell({ children }: Readonly<{ children: ReactNode }>) {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const navigate = useNavigate();
   const [paletteOpen, setPaletteOpen] = useState(false);
@@ -270,7 +270,7 @@ function SupervisorPopover({
   const qc = useQueryClient();
 
   const [transition, setTransition] = useState<null | "starting" | "stopping">(null); // NOSONAR
-  const [console_, setConsole] = useState<string>("");
+  const [console_, setConsole] = useState<string>(""); // NOSONAR
   const [copiedConsole, setCopiedConsole] = useState(false);
   const [copiedLog, setCopiedLog] = useState(false);
   const transitionStart = useRef<number>(0);

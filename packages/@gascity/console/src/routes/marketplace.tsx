@@ -125,13 +125,13 @@ function MarketplacePage() {
     mutationFn: (input: { name: string; source: string; version?: string }) =>
       installFn({ data: input }),
     onSuccess: (r: { ok: boolean; output: string; error?: string }) => {
-      if (!r.ok) {
-        setGlobalError(r.error ?? r.output ?? "install failed")
-        setFeedback(null)
-      } else {
+      if (r.ok) {
         setGlobalError(null)
         setFeedback(r.output)
         invalidateAll()
+      } else {
+        setGlobalError(r.error ?? r.output ?? "install failed")
+        setFeedback(null)
       }
     },
     onError: (e) => setGlobalError(e instanceof Error ? e.message : String(e)),
@@ -310,6 +310,7 @@ function MarketplacePage() {
           <TabButton active={tab === "installed"} onClick={() => setTab("installed")}>
             installed
             <span className="ml-1.5 text-muted-foreground">{installedList.length}</span>
+            {" "}
             {updateAvailableCount > 0 && (
               <Badge variant="default" className="ml-2 font-mono text-[10px]">
                 {updateAvailableCount} update{updateAvailableCount === 1 ? "" : "s"}

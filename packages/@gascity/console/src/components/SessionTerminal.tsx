@@ -5,7 +5,7 @@ import { useQuery } from "@tanstack/react-query";
 
 import { gcSessionPeek } from "@/lib/gc.functions";
 
-export function SessionTerminal({ name }: { name: string }) {
+export function SessionTerminal({ name }: Readonly<{ name: string }>) {
   const containerRef = useRef<HTMLDivElement>(null);
   const wsRef = useRef<WebSocket | null>(null);
   const termRef = useRef<unknown>(null);
@@ -201,12 +201,11 @@ export function SessionTerminal({ name }: { name: string }) {
 }
 
 function StatusPill({ status }: { status: string }) {
-  const color =
-    status === "open"
-      ? "live-dot"
-      : status === "error" || status === "unavailable"
-        ? "bg-destructive"
-        : "bg-muted-foreground";
+  const color = (() => {
+    if (status === "open") return "live-dot"
+    if (status === "error" || status === "unavailable") return "bg-destructive"
+    return "bg-muted-foreground"
+  })();
   return (
     <span className="flex items-center gap-1.5 font-mono text-[11px] text-muted-foreground">
       <span className={`inline-block h-1.5 w-1.5 rounded-full ${color}`} />
