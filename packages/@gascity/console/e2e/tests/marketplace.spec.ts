@@ -46,7 +46,7 @@ test.describe('Marketplace Tests', () => {
     // Snapshot the visible card count, then narrow the search and
     // assert the count actually moves. With an empty catalogue both
     // values will be 0, so also assert the search value was applied.
-    const cards = page.locator('[data-testid^="pack-card"]');
+    const cards = page.locator('[data-testid^="pack-card-"]');
     const before = await cards.count();
 
     await search.fill('slack-this-string-matches-nothing');

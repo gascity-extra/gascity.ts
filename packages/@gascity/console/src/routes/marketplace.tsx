@@ -709,7 +709,7 @@ function BrowseCard({
 }) {
   const tagLabel = TAG_LABELS[entry.tag] ?? entry.tag
   return (
-    <Card className="relative flex h-full min-w-0 flex-col gap-0 overflow-hidden border-border bg-card py-0">
+    <Card data-testid={`pack-card-${entry.name}`} className="relative flex h-full min-w-0 flex-col gap-0 overflow-hidden border-border bg-card py-0">
       {/* Top-right corner cluster: source icon + install/uninstall
           action. Both live outside the clickable body so they
           remain real interactive elements (anchors/buttons, not
@@ -918,7 +918,7 @@ function InstalledCard({
     )
   })()
   return (
-    <Card className="relative flex h-full min-w-0 flex-col gap-0 overflow-hidden border-border bg-card py-0">
+    <Card data-testid={`installed-card-${info.name}`} className="relative flex h-full min-w-0 flex-col gap-0 overflow-hidden border-border bg-card py-0">
       {/* Top-right corner cluster: action buttons + source icon. */}
       <div className="absolute right-2 top-1.5 z-10 flex shrink-0 items-center gap-1.5">
         {info.status === "update_available" && (

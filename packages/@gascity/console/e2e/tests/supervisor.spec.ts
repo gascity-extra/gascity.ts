@@ -48,9 +48,9 @@ test.describe('Supervisor Tests', () => {
     // the panel shows the unreachable base URL plus a placeholder for
     // the version. Accept either the resolved version string OR the
     // placeholder `—` rendered next to the supervisor dot, plus the
-    // reachable-vs-unreachable textual hint (operational/down).
+    // reachable-vs-unreachable textual hint (operational/down/supervisor up).
     const pageContent = await page.content();
-    expect(pageContent.toLowerCase()).toMatch(/version|operational|down|—|unreachable/);
+    expect(pageContent.toLowerCase()).toMatch(/version|operational|down|—|unreachable|supervisor up/);
 
     await page.keyboard.press('v');
     await page.waitForTimeout(500);
