@@ -644,7 +644,7 @@ function BrowseToolbar({
   totalCount,
   sort,
   onSort,
-}: {
+}: Readonly<{
   search: string
   onSearch: (v: string) => void
   tagFilter: string

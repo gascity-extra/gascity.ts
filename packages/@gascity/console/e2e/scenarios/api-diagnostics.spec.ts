@@ -10,6 +10,7 @@ import { isGcBackendReachable } from '../lib/actions';
 test.describe('GC API Diagnostics', () => {
   test.beforeAll(async () => {
     if (!(await isGcBackendReachable())) {
+      // NOSONAR: Skip when GC supervisor is not available - this is an optional e2e diagnostic test
       test.skip(true, 'GC supervisor unreachable; scenario tests require a live backend.');
     }
   });

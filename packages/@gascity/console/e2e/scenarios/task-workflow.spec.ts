@@ -15,6 +15,7 @@ test.describe('Task Creation and Processing Workflow', () => {
     // Skip these scenario tests if GC backend is not reachable.
     // These tests require a live GC supervisor to verify end-to-end workflows.
     if (!(await isGcBackendReachable())) {
+      // NOSONAR: Skip when GC supervisor is not available - these are optional e2e workflow tests
       test.skip(true, 'GC supervisor unreachable; scenario tests require a live backend.');
     }
   });

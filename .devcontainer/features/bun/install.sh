@@ -7,16 +7,20 @@ echo "Setting up Bun environment..."
 BUN_INSTALL="$HOME/.bun"
 export PATH="$BUN_INSTALL/bin:$PATH"
 
+# Constants for shell configuration
+BUN_EXPORT_LINE='export BUN_INSTALL="$HOME/.bun"'
+BUN_PATH_LINE='export PATH="$BUN_INSTALL/bin:$PATH"'
+
 # Add to .bashrc if it exists
-if [[ -f "$HOME/.bashrc" ]] && ! grep -q 'export BUN_INSTALL="$HOME/.bun"' "$HOME/.bashrc"; then
-    echo 'export BUN_INSTALL="$HOME/.bun"' >> "$HOME/.bashrc"
-    echo 'export PATH="$BUN_INSTALL/bin:$PATH"' >> "$HOME/.bashrc"
+if [[ -f "$HOME/.bashrc" ]] && ! grep -q "$BUN_EXPORT_LINE" "$HOME/.bashrc"; then
+    echo "$BUN_EXPORT_LINE" >> "$HOME/.bashrc"
+    echo "$BUN_PATH_LINE" >> "$HOME/.bashrc"
 fi
 
 # Add to .zshrc if it exists
-if [[ -f "$HOME/.zshrc" ]] && ! grep -q 'export BUN_INSTALL="$HOME/.bun"' "$HOME/.zshrc"; then
-    echo 'export BUN_INSTALL="$HOME/.bun"' >> "$HOME/.zshrc"
-    echo 'export PATH="$BUN_INSTALL/bin:$PATH"' >> "$HOME/.zshrc"
+if [[ -f "$HOME/.zshrc" ]] && ! grep -q "$BUN_EXPORT_LINE" "$HOME/.zshrc"; then
+    echo "$BUN_EXPORT_LINE" >> "$HOME/.zshrc"
+    echo "$BUN_PATH_LINE" >> "$HOME/.zshrc"
 fi
 
 # Verify installation

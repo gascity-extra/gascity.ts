@@ -56,6 +56,7 @@ test.describe('Sling → pickup → result', () => {
 
   test.beforeAll(async () => {
     if (!(await isGcBackendReachable())) {
+      // NOSONAR: Skip when GC supervisor is not available - this is an optional e2e sling test
       test.skip(true, 'GC supervisor unreachable; scenario requires a live backend.');
     }
   });
