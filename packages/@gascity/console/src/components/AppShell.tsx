@@ -759,6 +759,13 @@ function SlingDrawer({
     <div
       className="fixed inset-0 z-50 flex items-start justify-center bg-background/60 pt-[12vh]"
       onClick={() => onOpenChange(false)}
+      onKeyDown={(e) => {
+        if (e.key === 'Escape') {
+          onOpenChange(false);
+        }
+      }}
+      role="button"
+      tabIndex={0}
     >
       <div
         onClick={(e) => e.stopPropagation()}
