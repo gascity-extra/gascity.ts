@@ -211,6 +211,56 @@ function StatusDot({
   return <span className={clsx("inline-block h-1.5 w-1.5 rounded-full", cls)} />;
 }
 
+// Copy a string to the clipboard with a brief "copied!" confirmation.
+// Uses the navigator Clipboard API where available; falls back to a hidden
+// textarea + execCommand for older browsers (and the test browser context
+// where clipboard may not be granted). The fallback also works in headless
+// Chromium without permissions.
+async function copyText(text: string, setFlag: (b: boolean) => void): Promise<void> {
+  let ok = false;
+  try {
+    if (
+      typeof navigator !== "undefined" &&
+      navigator.clipboard &&
+      typeof navigator.clipboard.writeText === "function"
+    ) {
+      await navigator.clipboard.writeText(text);
+      ok = true;
+    }
+  } catch {
+    // fall through to execCommand
+  }
+  if (!ok && typeof document !== "undefined") {
+    try {
+      const ta = document.createElement("textarea");
+      ta.value = text;
+      ta.style.position = "fixed";
+      ta.style.opacity = "0";
+      document.body.appendChild(ta);
+      ta.focus();
+      ta.select();
+      ok = document.execCommand("copy");
+      document.body.removeChild(ta);
+    } catch {
+      // Both paths failed. The operator can still drag-select the pre block
+      // and Cmd+C — we just don't show "copied!".
+    }
+  }
+  if (ok) {
+    setFlag(true);
+    setTimeout(() => setFlag(false), 1_200);
+  }
+}
+
+function getDisplayLog(output: string | undefined, clearedAt: number | null): string | undefined {
+  return output && clearedAt && Date.now() - clearedAt < 50 ? "" : output;
+}
+
+function getRefetchInterval(logPaused: boolean, transition: null | "starting" | "stopping"): number | false {
+  if (logPaused) return false;
+  return transition === "starting" ? 1000 : 3000;
+}
+
 function SupervisorPopover({
   onClose,
   health,
@@ -238,84 +288,13 @@ function SupervisorPopover({
   const [copiedConsole, setCopiedConsole] = useState(false);
   const [copiedLog, setCopiedLog] = useState(false);
   const transitionStart = useRef<number>(0);
-  // Supervisor log view controls. `logFollowing` auto-scrolls to the
-  // newest line whenever the buffer updates; `logPaused` freezes
-  // polling entirely so the operator can read without the view
-  // jumping; `logClearedAt` lets the "clear" button wipe the local
-  // view (the next fetch repopulates it).
   const [logFollowing, setLogFollowing] = useState(true);
   const [logPaused, setLogPaused] = useState(false);
   const [logClearedAt, setLogClearedAt] = useState<number | null>(null);
   const logRef = useRef<HTMLPreElement>(null);
 
-  // Copy a string to the clipboard with a brief "copied!" confirmation.
-  // Uses the navigator Clipboard API where available; falls back to a
-  // hidden textarea + execCommand for older browsers (and the test
-  // browser context where clipboard may not be granted). The fallback
-  // also works in headless Chromium without permissions.
-  async function copyText(text: string, setFlag: (b: boolean) => void) {
-    // Try the modern Clipboard API first; on any failure (browser
-    // denial, headless context, sandboxed iframe) fall back to a hidden
-    // textarea + execCommand, which works in headless Chromium without
-    // clipboard permissions. Either way we surface "copied!" feedback
-    // so the operator knows the action succeeded.
-    let ok = false;
-    try {
-      if (
-        typeof navigator !== "undefined" &&
-        navigator.clipboard &&
-        typeof navigator.clipboard.writeText === "function"
-      ) {
-        await navigator.clipboard.writeText(text);
-        ok = true;
-      }
-    } catch {
-      // fall through to execCommand
-    }
-    if (!ok && typeof document !== "undefined") {
-      try {
-        const ta = document.createElement("textarea");
-        ta.value = text;
-        ta.style.position = "fixed";
-        ta.style.opacity = "0";
-        document.body.appendChild(ta);
-        ta.focus();
-        ta.select();
-        ok = document.execCommand("copy");
-        document.body.removeChild(ta);
-      } catch {
-        // Both paths failed. The operator can still drag-select the
-        // pre block and Cmd+C — we just don't show "copied!".
-      }
-    }
-    if (ok) {
-      setFlag(true);
-      setTimeout(() => setFlag(false), 1_200);
-    }
-  }
+  const displayLog = getDisplayLog(log?.output, logClearedAt);
 
-  const { data: log } = useQuery({
-    queryKey: ["gc", "supervisor-logs"],
-    queryFn: () => logs({ data: { lines: 200 } }),
-    // Pause polling when the operator explicitly freezes the view, so
-    // they can inspect without the buffer mutating underneath. Also
-    // back off when the supervisor is down — the response is the
-    // same empty string every tick, no point hammering the API.
-    refetchInterval: logPaused ? false : transition === "starting" ? 1000 : 3000,
-  });
-
-  // The supervisor log's local view can be cleared by the operator.
-  // `displayLog` is what the <pre> actually shows: undefined until
-  // the first fetch arrives, then the polled output, but cleared if
-  // the operator hit "clear" after the most recent fetch.
-  const displayLog =
-    log?.output && logClearedAt && Date.now() - logClearedAt < 50
-      ? ""
-      : log?.output
-
-  // Auto-scroll to the bottom whenever a new log line arrives and the
-  // operator hasn't disabled follow. Use a microtask so the DOM has
-  // already been updated with the new content.
   useEffect(() => {
     if (!logFollowing) return
     if (!logRef.current) return
@@ -325,23 +304,9 @@ function SupervisorPopover({
     })
   }, [log?.output, logFollowing])
 
-  // (Header already polls /v0/health via its own query; we don't need
-  // a city-status or supervisor-discover query in this popover —
-  // the popover only reflects supervisor lifecycle, not city stats.)
-
-  // Clear the "starting" transition once the city actually comes up;
-  // clear the "stopping" transition once the city disappears. This is
-  // what makes the LED green / amber behave deterministically instead of
-  // just guessing based on the supervisor reachability.
   useEffect(() => {
     if (!transition) return;
     const elapsed = Date.now() - transitionStart.current;
-    // Clear optimistic transitions once the supervisor's actual
-    // reachability matches the intended outcome. For `starting` we
-    // wait for it to become reachable; for `stopping` we wait for
-    // it to go down (or for the safety timeout, in case the
-    // supervisor is wedged and the health probe keeps returning a
-    // stale reachable=true).
     if (transition === "starting" && health?.reachable) {
       setTransition(null);
     } else if (transition === "stopping" && !health?.reachable) {
@@ -350,6 +315,14 @@ function SupervisorPopover({
       setTransition(null);
     }
   }, [transition, health?.reachable]);
+
+  const refetchInterval = getRefetchInterval(logPaused, transition);
+
+  const { data: log } = useQuery({
+    queryKey: ["gc", "supervisor-logs"],
+    queryFn: () => logs({ data: { lines: 200 } }),
+    refetchInterval,
+  });
 
   // Supervisor lifecycle phase. Only two steady states — `down`
   // (supervisor not reachable) and `up` (supervisor reachable, no

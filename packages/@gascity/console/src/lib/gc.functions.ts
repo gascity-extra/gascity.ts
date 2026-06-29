@@ -908,27 +908,13 @@ function parseSupervisorToml(text: string): {
   let currentSection: string | null = null
   for (const rawLine of text.split(/\r?\n/)) {
     const line = rawLine.trim()
-    if (line.length === 0 || line.startsWith('#')) continue
-    const sectionMatch = line.match(/^\[([^\]]+)\]$/)
-    if (sectionMatch) {
-      currentSection = sectionMatch[1].trim()
-      continue
-    }
+    if (shouldSkipLine(line)) continue
+    currentSection = updateSection(line, currentSection)
     if (currentSection !== 'supervisor') continue
     const kv = line.match(/^([a-zA-Z_][a-zA-Z0-9_-]*)\s*=\s*(.+)$/)
     if (!kv) continue
     const key = kv[1]
-    let value = kv[2].trim()
-    // Strip trailing inline comment.
-    const hashIdx = value.indexOf('#')
-    if (hashIdx >= 0) value = value.slice(0, hashIdx).trim()
-    // Strip surrounding quotes if present.
-    if (
-      (value.startsWith('"') && value.endsWith('"')) ||
-      (value.startsWith("'") && value.endsWith("'"))
-    ) {
-      value = value.slice(1, -1)
-    }
+    const value = parseTomlValue(kv[2])
     if (key === 'bind' || key === 'address' || key === 'host') {
       result.bind = value
     } else if (key === 'port') {
@@ -939,6 +925,31 @@ function parseSupervisorToml(text: string): {
     }
   }
   return result
+}
+
+function shouldSkipLine(line: string): boolean {
+  return line.length === 0 || line.startsWith('#')
+}
+
+function updateSection(line: string, currentSection: string | null): string | null {
+  const sectionMatch = line.match(/^\[([^\]]+)\]$/)
+  if (sectionMatch) {
+    return sectionMatch[1].trim()
+  }
+  return currentSection
+}
+
+function parseTomlValue(rawValue: string): string {
+  let value = rawValue.trim()
+  const hashIdx = value.indexOf('#')
+  if (hashIdx >= 0) value = value.slice(0, hashIdx).trim()
+  if (
+    (value.startsWith('"') && value.endsWith('"')) ||
+    (value.startsWith("'") && value.endsWith("'"))
+  ) {
+    value = value.slice(1, -1)
+  }
+  return value
 }
 
 /**
