@@ -1,3 +1,4 @@
+// @ts-ignore - TanStack Start transformer has issues with this file
 /**
  * Gas City Server Functions (TanStack Start)
  *
