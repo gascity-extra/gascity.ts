@@ -118,7 +118,7 @@ export async function waitForSupervisorPanel(page: Page): Promise<void> {
  */
 
 export class E2EActions {
-  constructor(private page: Page) { }
+  constructor(private readonly page: Page) { }
 
   /**
    * Navigate to a page by path. The default Playwright page.goto

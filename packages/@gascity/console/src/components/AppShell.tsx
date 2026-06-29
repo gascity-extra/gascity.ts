@@ -250,7 +250,7 @@ function SupervisorPopover({
   onClose,
   health,
   version,
-}: {
+}: Readonly<{
   onClose: () => void;
   health:
     | {
@@ -261,7 +261,7 @@ function SupervisorPopover({
       }
     | undefined;
   version: { version: string } | undefined;
-}) {
+}>) {
   const logs = useServerFn(gcSupervisorLogs);
   const supervisorStart = useServerFn(gcSupervisorStart);
   const supervisorStop = useServerFn(gcSupervisorStop);
@@ -426,7 +426,7 @@ return (
       />
       <div
         className="absolute right-4 top-11 z-50 w-[620px] overflow-hidden rounded-md border border-border bg-card shadow-lg"
-        onClick={(e) => e.stopPropagation()} // NOSONAR: backdrop click handler
+        onClick={(e) => e.stopPropagation()} // NOSONAR: stopPropagation is intentional
         role="dialog"
         aria-modal="true"
       >
@@ -622,10 +622,10 @@ return (
 function Sidebar({
   pathname,
   onSling,
-}: {
+}: Readonly<{
   pathname: string;
   onSling: () => void;
-}) {
+}>) {
   return (
     <nav className="flex h-full w-48 shrink-0 flex-col overflow-y-auto border-r border-border">
       <button
@@ -687,7 +687,7 @@ function CommandPalette({
   return (
     <div
       className="fixed inset-0 z-50 flex items-start justify-center bg-background/60 pt-[15vh]"
-      onClick={() => onOpenChange(false)} // NOSONAR: simple backdrop click handler
+      onClick={() => onOpenChange(false)} // NOSONAR: backdrop click handler, Escape handled by parent
     >
       <div
         onClick={(e) => e.stopPropagation()}

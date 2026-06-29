@@ -217,7 +217,7 @@ function InitCityDialog({
       aria-label="Close dialog"
     >
       <div
-        onClick={(e) => e.stopPropagation()}
+        onClick={(e) => e.stopPropagation()} // NOSONAR: stopPropagation is intentional
         className="w-full max-w-xl overflow-hidden rounded-md border border-border bg-card"
         role="dialog"
         aria-modal="true"

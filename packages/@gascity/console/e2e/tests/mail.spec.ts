@@ -89,7 +89,6 @@ test.describe('Mail Tests', () => {
     await page.waitForTimeout(500);
 
     // Verify compose drawer is closed
-    const drawer = page.locator('[role="dialog"]');
-    expect(await drawer.count()).toBe(0);
+    await expect(page.locator('[role="dialog"]')).toHaveCount(0);
   });
 });

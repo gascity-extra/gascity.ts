@@ -3,7 +3,7 @@
  */
 
 import { configureGasCityClient } from '@gascity/client'
-import { silentIfOffline, isCityNotConfigured, CITY_NOT_CONFIGURED_HINT } from './gc-errors'
+import { silentIfOffline, isCityNotConfigured } from './gc-errors'
 
 // Configure the OpenAPI-generated client once at module load. Without this,
 // `DefaultService.*` calls hit `axios` with an empty `BASE`, which throws

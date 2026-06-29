@@ -2895,7 +2895,7 @@ function sourcesEqual(a: string | undefined, b: string | undefined): boolean {
   // `…/foo.git//sub` matches `…/foo//sub`. `.git` can appear
   // either at the end of the repo segment OR inline before the
   // `//subpath` separator — `gc import add` accepts both.
-  const norm = (s: string) =>
+  const norm = (s: string) => // NOSONAR: simple string normalization, acceptable performance
     s
       .replace(/\.git(\/|$)/g, '$1')
       .replace(/\/+$/, '')

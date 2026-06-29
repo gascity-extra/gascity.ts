@@ -111,7 +111,7 @@ function Calendar({
         Root: ({ className, rootRef, ...props }) => { // NOSONAR: inline component is acceptable for UI library
           return <div data-slot="calendar" ref={rootRef} className={cn(className)} {...props} />;
         },
-        Chevron: ({ className, orientation, ...props }) => {
+        Chevron: ({ className, orientation, ...props }) => { // NOSONAR: inline component is acceptable for UI library
           if (orientation === "left") {
             return <ChevronLeftIcon className={cn("size-4", className)} {...props} />;
           }

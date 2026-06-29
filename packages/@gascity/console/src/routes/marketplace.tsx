@@ -201,12 +201,12 @@ function MarketplacePage() {
   const updateOneMut = useMutation({
     mutationFn: (name: string) => updateOneFn({ data: { name } }),
     onSuccess: (r: { ok: boolean; output: string; error?: string }) => {
-      if (!r.ok) {
-        setGlobalError(r.error ?? r.output ?? "update failed")
-      } else {
+      if (r.ok) {
         setGlobalError(null)
         setFeedback(r.output)
         invalidateAll()
+      } else {
+        setGlobalError(r.error ?? r.output ?? "update failed")
       }
     },
     onError: (e) => setGlobalError(e instanceof Error ? e.message : String(e)),

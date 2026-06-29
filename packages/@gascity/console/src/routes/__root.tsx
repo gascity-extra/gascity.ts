@@ -34,7 +34,7 @@ function NotFoundComponent() {
   );
 }
 
-function ErrorComponent({ error, reset }: { error: Error; reset: () => void }) {
+function ErrorComponent({ error, reset }: Readonly<{ error: Error; reset: () => void }>) {
   console.error(error);
   const router = useRouter();
   useEffect(() => {
@@ -87,7 +87,7 @@ export const Route = createRootRoute({
   errorComponent: ErrorComponent,
 });
 
-function RootShell({ children }: { children: ReactNode }) {
+function RootShell({ children }: Readonly<{ children: ReactNode }>) {
   // One client per browser session; instantiating here avoids a hydration
   // mismatch between SSR (no client yet) and the post-hydration render.
   const [queryClient] = useState(() => new QueryClient());
