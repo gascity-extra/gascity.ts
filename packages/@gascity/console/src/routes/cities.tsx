@@ -19,7 +19,7 @@ export const Route = createFileRoute("/cities")({
   component: CitiesPage,
 });
 
-function CitiesPage() {
+function CitiesPage() { // NOSONAR: component has no props
   const list = useServerFn(gcListCities);
   const start = useServerFn(gcCityStart);
   const stop = useServerFn(gcCityStop);

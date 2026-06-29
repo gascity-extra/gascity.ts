@@ -215,12 +215,12 @@ function MarketplacePage() {
   const updateAllMut = useMutation({
     mutationFn: () => updateAllFn({ data: undefined }),
     onSuccess: (r: { ok: boolean; output: string; error?: string }) => {
-      if (!r.ok) {
-        setGlobalError(r.error ?? r.output ?? "update all failed")
-      } else {
+      if (r.ok) {
         setGlobalError(null)
         setFeedback(r.output)
         invalidateAll()
+      } else {
+        setGlobalError(r.error ?? r.output ?? "update all failed")
       }
     },
     onError: (e) => setGlobalError(e instanceof Error ? e.message : String(e)),
@@ -645,7 +645,7 @@ function BrowseToolbar({
   totalCount,
   sort,
   onSort,
-}: {
+}: Readonly<{
   search: string
   onSearch: (v: string) => void
   tagFilter: string
@@ -654,7 +654,7 @@ function BrowseToolbar({
   totalCount: number
   sort: SortKey
   onSort: (v: SortKey) => void
-}) {
+}>) {
   return (
     <div className="flex flex-wrap items-center gap-2 border-b border-border px-6 py-2.5">
       <Input

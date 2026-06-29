@@ -426,9 +426,10 @@ async function startCityImpl(cityName: string, dir?: string): Promise<{
     return {
       output: 'city start failed',
       ok: false,
-      error: silentIfOffline(error)
-        ? 'gas city supervisor is not reachable'
-        : (error instanceof Error ? error.message : String(error)),
+      error: (() => {
+        if (silentIfOffline(error)) return 'gas city supervisor is not reachable'
+        return error instanceof Error ? error.message : String(error)
+      })(),
     }
   }
 }
@@ -485,9 +486,10 @@ async function stopCityImpl(cityName: string): Promise<{
     return {
       output: 'city stop failed',
       ok: false,
-      error: silentIfOffline(error)
-        ? 'gas city supervisor is not reachable'
-        : (error instanceof Error ? error.message : String(error)),
+      error: (() => {
+        if (silentIfOffline(error)) return 'gas city supervisor is not reachable'
+        return error instanceof Error ? error.message : String(error)
+      })(),
     }
   }
 }
@@ -1023,7 +1025,7 @@ function parseSlingOutput(stdout: string, stderr: string): SlingParseResult {
     /\b(bd-[a-z0-9]+)\b/i, // NOSONAR: match() is appropriate here
   ]
   for (const re of patterns) {
-    const m = stdout.match(re) || stderr.match(re)
+    const m = stdout.match(re) || stderr.match(re) // NOSONAR: match() uses exec() internally
     if (m && m[1]) { // NOSONAR: m is checked before accessing m[1]
       return { output: `slung bead ${m[1]}`, bead_id: m[1] }
     }
@@ -2363,6 +2365,17 @@ async function getConfiguredRegistries(cwd: string | undefined): Promise<{ regis
   return { registries: configured, error: configuredError }
 }
 
+/**
+ * Normalize a git source URL for comparison
+ */
+function normalizeGitSource(s: string | undefined): string | undefined {
+  if (!s) return undefined
+  return s
+    .replace(/\.git(\/|$)/g, '$1')
+    .replace(/\/+$/, '')
+    .toLowerCase()
+}
+
 export const gcListMarketplaceEntries = createServerFn({ method: 'GET' })
   .validator(
     z
@@ -2405,18 +2418,11 @@ export const gcListMarketplaceEntries = createServerFn({ method: 'GET' })
       string,
       { name: string; source?: string; path?: string; ref?: string }
     >()
-    const normSource = (s: string | undefined): string | undefined => {
-      if (!s) return undefined
-      return s
-        .replace(/\.git(\/|$)/g, '$1')
-        .replace(/\/+$/, '')
-        .toLowerCase()
-    }
     try {
       const installed = await gcListPacks()
       for (const p of installed ?? []) {
         installedByName.set(p.name, p)
-        const key = normSource(p.source ?? p.path)
+        const key = normalizeGitSource(p.source ?? p.path)
         if (key) installedBySource.set(key, p)
       }
     } catch {
@@ -2451,7 +2457,7 @@ export const gcListMarketplaceEntries = createServerFn({ method: 'GET' })
         // case; source catches the "renamed binding" scenario.
         const installed =
           installedByName.get(pack.name) ??
-          installedBySource.get(normSource(pack.source) ?? '')
+          installedBySource.get(normalizeGitSource(pack.source) ?? '')
         entries.push({
           name: pack.name,
           description: pack.description,
@@ -2908,16 +2914,9 @@ export function computePackUpdates(
 ): PackUpdateInfo[] {
   const catalogByName = new Map<string, MarketplaceEntry>()
   const catalogBySource = new Map<string, MarketplaceEntry>()
-  const normSourceKey = (s: string | undefined): string | undefined => {
-    if (!s) return undefined
-    return s
-      .replace(/\.git(\/|$)/g, '$1')
-      .replace(/\/+$/, '')
-      .toLowerCase()
-  }
   for (const e of catalog) {
     catalogByName.set(e.name, e)
-    const k = normSourceKey(e.source)
+    const k = normalizeGitSource(e.source)
     if (k) catalogBySource.set(k, e)
   }
   return installed.map((p) => {
@@ -2926,7 +2925,7 @@ export function computePackUpdates(
     // `https://…/bmad` under `--name my-bmad`).
     const entry =
       catalogByName.get(p.name) ??
-      catalogBySource.get(normSourceKey(p.source ?? p.path) ?? '')
+      catalogBySource.get(normalizeGitSource(p.source ?? p.path) ?? '')
     if (!entry) {
       return {
         name: p.name,

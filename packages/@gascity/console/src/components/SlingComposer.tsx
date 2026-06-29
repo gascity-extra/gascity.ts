@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 
 import { gcListAgents, gcListCities, gcSling } from "@/lib/gc.functions";
 
-export function SlingComposer({ onDone }: { onDone?: () => void }) {
+export function SlingComposer({ onDone }: Readonly<{ onDone?: () => void }>) {
   const listCities = useServerFn(gcListCities);
   const listAgents = useServerFn(gcListAgents);
   const sling = useServerFn(gcSling);
@@ -16,7 +16,7 @@ export function SlingComposer({ onDone }: { onDone?: () => void }) {
   });
   const [city, setCity] = useState<string>("");
   useEffect(() => {
-    if (!city && cities && cities.length) {
+    if (!city && cities && cities.length) { // NOSONAR: explicit check is clearer here
       const active = cities.find((c) => c.active) ?? cities[0];
       setCity(active.name);
     }

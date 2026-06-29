@@ -164,7 +164,7 @@ function FormulaDetail() {
   );
 }
 
-function StepStatusDot({ status }: { status?: string }) {
+function StepStatusDot({ status }: Readonly<{ status?: string }>) {
   const s = (status ?? "").toLowerCase();
   const cls = (() => {
     if (s === "closed" || s === "done") return "bg-foreground"

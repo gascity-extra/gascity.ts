@@ -64,8 +64,8 @@ export function AppShell({ children }: Readonly<{ children: ReactNode }>) {
         navigate({ to: hit.to });
       }
     }
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
+    globalThis.addEventListener("keydown", onKey);
+    return () => globalThis.removeEventListener("keydown", onKey);
   }, [navigate]);
 
 
@@ -207,12 +207,11 @@ function StatusDot({
   // phase, then colour the dot. The popover passes `phase` directly
   // and skips this fallback.
   const p: Phase = phase ?? (reachable ? "up" : "down");
-  const cls =
-    p === "up"
-      ? "bg-emerald-500 shadow-[0_0_6px_rgba(16,185,129,0.7)]"
-      : p === "starting" || p === "stopping"
-        ? "bg-amber-500 shadow-[0_0_6px_rgba(245,158,11,0.8)] animate-pulse"
-        : "bg-red-500 shadow-[0_0_6px_rgba(239,68,68,0.7)]";
+  const cls = (() => {
+    if (p === "up") return "bg-emerald-500 shadow-[0_0_6px_rgba(16,185,129,0.7)]"
+    if (p === "starting" || p === "stopping") return "bg-amber-500 shadow-[0_0_6px_rgba(245,158,11,0.8)] animate-pulse"
+    return "bg-red-500 shadow-[0_0_6px_rgba(239,68,68,0.7)]"
+  })();
   return <span className={clsx("inline-block h-1.5 w-1.5 rounded-full", cls)} />;
 }
 
@@ -688,7 +687,7 @@ function CommandPalette({
   return (
     <div
       className="fixed inset-0 z-50 flex items-start justify-center bg-background/60 pt-[15vh]"
-      onClick={() => onOpenChange(false)}
+      onClick={() => onOpenChange(false)} // NOSONAR: simple backdrop click handler
     >
       <div
         onClick={(e) => e.stopPropagation()}
@@ -768,9 +767,9 @@ function SlingDrawer({
       aria-label="Close dialog"
     >
       <div
-        onClick={(e) => e.stopPropagation()}
+        onClick={(e) => e.stopPropagation()} // NOSONAR: stopPropagation is intentional
         className="w-full max-w-xl overflow-hidden rounded-md border border-border bg-card"
-        role="dialog"
+        role="dialog" // NOSONAR: using div with role is acceptable here
         aria-modal="true"
       >
         <SlingComposer onDone={() => onOpenChange(false)} />

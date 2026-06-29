@@ -42,6 +42,39 @@ export async function isGcBackendReachable(timeoutMs = 1500): Promise<boolean> {
 }
 
 /**
+ * Find a matching option from a list of Playwright options
+ */
+async function findMatchingOption(
+  options: import('@playwright/test').Locator[],
+  target: string,
+  skipValues: string[] = []
+): Promise<string | null> {
+  for (const opt of options) {
+    const optText = await opt.textContent();
+    if (optText === target && !skipValues.includes(optText)) {
+      return optText;
+    }
+  }
+  return null;
+}
+
+/**
+ * Find the first valid option from a list
+ */
+async function findFirstValidOption(
+  options: import('@playwright/test').Locator[],
+  skipValues: string[] = []
+): Promise<string | null> {
+  for (const opt of options) {
+    const optText = await opt.textContent();
+    if (optText && !skipValues.includes(optText) && optText.trim()) {
+      return optText;
+    }
+  }
+  return null;
+}
+
+/**
  * Wait for the React app to hydrate. The console is server-rendered by
  * TanStack Start, so the DOM is present immediately but onClick handlers
  * (and global keydown listeners) are only attached after hydration
@@ -223,11 +256,9 @@ export class E2EActions {
   async slingTask(cityName: string, agentName: string, taskDescription: string) {
     try {
       await this.openSlingDrawer();
-
-      // Wait for drawer to fully load
       await this.page.waitForTimeout(2000);
 
-      // Get available cities from the dropdown
+      // Get and select city
       const citySelect = this.page.locator('select').first();
       const cityOptions = await citySelect.locator('option').all();
 
@@ -235,40 +266,22 @@ export class E2EActions {
         throw new Error('No cities available in sling drawer');
       }
 
-      // Try to use provided city name, otherwise use first available
-      let cityToUse = cityName;
-      let cityFound = false;
-
-      for (const opt of cityOptions) {
-        const optText = await opt.textContent();
-        if (optText === cityName) {
-          cityFound = true;
-          break;
+      let cityToUse = await findMatchingOption(cityOptions, cityName, []);
+      if (!cityToUse) {
+        cityToUse = await findFirstValidOption(cityOptions, ['(none)']);
+        if (cityToUse) {
+          console.log(`Using first available city: ${cityToUse}`);
         }
       }
 
-      if (!cityFound && cityOptions.length > 0) {
-        // Find first real city (skip "(none)" and empty values)
-        for (const opt of cityOptions) {
-          const optText = await opt.textContent();
-          if (optText && optText !== '(none)' && optText.trim()) {
-            cityToUse = optText;
-            console.log(`Using first available city: ${cityToUse}`);
-            break;
-          }
-        }
-      }
-
-      // If still no valid city found, throw error
-      if (!cityToUse || cityToUse === '(none)' || !cityToUse.trim()) {
+      if (!cityToUse) {
         throw new Error('No valid city available for sling');
       }
 
-      // Select city
       await citySelect.selectOption(cityToUse);
-      await this.page.waitForTimeout(3000);  // Wait for agents to load
+      await this.page.waitForTimeout(3000);
 
-      // Get available agents
+      // Get and select agent
       const agentSelect = this.page.locator('select').nth(1);
       const agentOptions = await agentSelect.locator('option').all();
 
@@ -276,31 +289,18 @@ export class E2EActions {
         throw new Error('No agents available for sling');
       }
 
-      // Try to use provided agent name, otherwise use first available (skip "choose…")
-      let agentToUse = agentName;
-      let agentFound = false;
-
-      for (const agentOption of agentOptions) {
-        const optText = await agentOption.textContent();
-        if (optText === agentName && optText !== 'choose…') {
-          agentFound = true;
-          break;
+      let agentToUse = await findMatchingOption(agentOptions, agentName, ['choose…']);
+      if (!agentToUse) {
+        agentToUse = await findFirstValidOption(agentOptions, ['choose…']);
+        if (agentToUse) {
+          console.log(`Using first available agent: ${agentToUse}`);
         }
       }
 
-      if (!agentFound) {
-        // Use first real agent (skip "choose…")
-        for (const agentOption of agentOptions) {
-          const optText = await agentOption.textContent();
-          if (optText && optText !== 'choose…') {
-            agentToUse = optText;
-            console.log(`Using first available agent: ${agentToUse}`);
-            break;
-          }
-        }
+      if (!agentToUse) {
+        throw new Error('No valid agent available for sling');
       }
 
-      // Select agent
       await agentSelect.selectOption(agentToUse);
       await this.page.waitForTimeout(500);
 

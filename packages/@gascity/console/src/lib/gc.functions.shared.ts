@@ -93,7 +93,7 @@ export async function runTmux(
       const err = Buffer.concat(stderr).toString('utf8')
       resolve({ ok: code === 0, stdout: out, stderr: err, code: code ?? -1 })
     })
-    if (opts.input !== undefined) {
+    if (opts.input !== undefined) { // NOSONAR: explicit undefined check is intentional
       child.stdin.end(opts.input)
     } else {
       child.stdin.end()

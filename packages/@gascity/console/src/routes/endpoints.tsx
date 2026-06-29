@@ -176,7 +176,7 @@ function EndpointsPage() {
             >
               managed-city-endpoints runbook
             </a>
-            . "Drift" means a rig's <code>.beads/dolt-server.port</code> mirror
+            {" "} "Drift" means a rig's <code>.beads/dolt-server.port</code> mirror
             doesn't match the city-managed Dolt port — the #1 cause of{" "}
             <code>rigStores=0</code> in supervisor.log.
           </div>
