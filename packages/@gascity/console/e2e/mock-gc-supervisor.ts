@@ -214,211 +214,220 @@ const server = createServer(async (req, res) => {
     const method = req.method ?? 'GET'
     const route = `${method} ${url.pathname}`
 
-    // Test-only: reset to a clean state between specs.
-    if (route === 'POST /__reset') {
-        state = freshState()
-        return json(res, 200, { ok: true })
+    const handler = getRouteHandler(route)
+    if (handler) {
+        return handler(req, res, url)
     }
 
-    // --- supervisor surface ---
-    if (route === 'GET /health') {
-        // When the supervisor is down, /health returns 503 so the
-        // console's `gcHealth` server function reports `reachable:false`
-        // and the panel correctly disables every action button.
-        if (!state.supervisorUp) {
-            return json(res, 503, { detail: 'mock-gc supervisor is down' })
-        }
-        return json(res, 200, {
-            status: 'ok',
-            build_id: `mock-${SUPERVISOR_VERSION}`,
-            cities_running: state.city.phase === 'running' ? 1 : 0,
-            cities_total: 1,
-        })
-    }
-    if (route === 'GET /v0/cities') {
-        if (!state.supervisorUp) {
-            return json(res, 503, { detail: 'mock-gc supervisor is down' })
-        }
-        return json(res, 200, {
-            items: [
-                {
-                    name: state.city.name,
-                    dir: state.city.path,
-                    status: state.city.phase,
-                    active: state.city.phase === 'running',
-                },
-            ],
-        })
-    }
-    // Supervisor daemon lifecycle. In production these endpoints don't
-    // exist — the daemon is a separate OS process and the console drives
-    // it via the `gc` CLI (see `gcSupervisorStart` in gc.functions.ts).
-    // The mock exposes them so e2e tests can exercise the bootstrap
-    // path end-to-end.
-    if (route === 'POST /v0/supervisor/start') {
-        if (state.supervisorUp) {
-            return json(res, 200, { detail: 'already running' })
-        }
-        state.supervisorUp = true
-        // Drop any leftover city — when the daemon restarts after being
-        // fully down, cities re-register on their own. Keeping stale
-        // city state here would be misleading.
-        state.city.phase = 'stopped'
-        state.city.agents = { total: 0, running: 0, idle: 0, suspended: 0, error: 0 }
-        state.city.sessions = { total: 0, running: 0, idle: 0 }
-        state.city.mail = { total: 0, unread: 0 }
-        state.city.work = { open: 0, closed: 0 }
-        recordEvent('supervisor.started', { version: SUPERVISOR_VERSION })
-        return json(res, 200, { status: 'ok' })
-    }
-    if (route === 'POST /v0/supervisor/stop') {
-        if (!state.supervisorUp) {
-            return json(res, 200, { detail: 'already stopped' })
-        }
-        state.supervisorUp = false
-        state.city.phase = 'stopped'
-        state.city.agents = { total: 0, running: 0, idle: 0, suspended: 0, error: 0 }
-        state.city.sessions = { total: 0, running: 0, idle: 0 }
-        recordEvent('supervisor.stopped', {})
-        return json(res, 200, { status: 'ok' })
-    }
-    if (route === 'POST /v0/supervisor/restart') {
-        state.supervisorUp = false
-        state.city.phase = 'stopped'
-        state.city.agents = { total: 0, running: 0, idle: 0, suspended: 0, error: 0 }
-        state.city.sessions = { total: 0, running: 0, idle: 0 }
-        recordEvent('supervisor.stopped', {})
-        // Tiny gap so consumers see the "down" frame between stop and
-        // start; mirrors the gap in the real `gc restart` lifecycle.
-        setTimeout(() => {
-            state.supervisorUp = true
-            recordEvent('supervisor.started', { version: SUPERVISOR_VERSION })
-        }, 50)
-        return json(res, 200, { status: 'ok' })
-    }
-    if (route === 'POST /v0/city') {
-        // Check the anti-CSRF header BEFORE checking supervisor
-        // reachability so a missing header returns 403 (the wire-level
-        // invariant the console relies on) rather than 503.
-        if (!req.headers['x-gc-request']) {
-            return json(res, 403, { detail: 'X-GC-Request header required' })
-        }
-        if (!state.supervisorUp) {
-            return json(res, 503, { detail: 'mock-gc supervisor is down' })
-        }
-        if (state.city.phase === 'running') {
-            return json(res, 409, { detail: `city "${state.city.name}" already running` })
-        }
-        state.city.phase = 'running'
-        state.city.startedAt = new Date().toISOString()
-        state.city.agents = { total: 3, running: 2, idle: 1, suspended: 0, error: 0 }
-        state.city.sessions = { total: 3, running: 2, idle: 1 }
-        state.city.mail = { total: 5, unread: 2 }
-        state.city.work = { open: 4, closed: 12 }
-        return asyncAccepted(req, res, 'city.create', { city: state.city.name })
-    }
+    return json(res, 404, { detail: `mock-gc: ${route} not implemented` })
+})
+
+function getRouteHandler(route: string): ((req: IncomingMessage, res: ServerResponse, url: URL) => Promise<void>) | null {
+    if (route === 'POST /__reset') return handleReset
+    if (route === 'GET /health') return handleHealth
+    if (route === 'GET /v0/cities') return handleGetCities
+    if (route === 'POST /v0/supervisor/start') return handleSupervisorStart
+    if (route === 'POST /v0/supervisor/stop') return handleSupervisorStop
+    if (route === 'POST /v0/supervisor/restart') return handleSupervisorRestart
+    if (route === 'POST /v0/city') return handlePostCity
+    if (route === 'GET /v0/events') return handleGetEvents
+
     const unregisterMatch = route.match(/^POST \/v0\/city\/([^/]+)\/unregister$/)
     if (unregisterMatch) {
-        // Anti-CSRF header checked first so missing header → 403 (the
-        // contract the console relies on), not 503 (which signals
-        // "supervisor down").
-        if (!req.headers['x-gc-request']) {
-            return json(res, 403, { detail: 'X-GC-Request header required' })
-        }
-        if (!state.supervisorUp) {
-            return json(res, 503, { detail: 'mock-gc supervisor is down' })
-        }
-        const name = decodeURIComponent(unregisterMatch[1])
-        if (name !== state.city.name) {
-            return json(res, 404, { detail: `city "${name}" not registered` })
-        }
-        if (state.city.phase === 'stopped') {
-            return json(res, 409, { detail: `city "${name}" not running` })
-        }
-        state.city.phase = 'stopped'
-        state.city.stoppedAt = new Date().toISOString()
-        state.city.agents = { total: 0, running: 0, idle: 0, suspended: 0, error: 0 }
-        state.city.sessions = { total: 0, running: 0, idle: 0 }
-        state.city.mail = { total: 0, unread: 0 }
-        state.city.work = { open: 0, closed: 0 }
-        return asyncAccepted(req, res, 'city.unregister', { city: name })
-    }
-    const statusMatch = route.match(/^GET \/v0\/city\/([^/]+)\/status$/)
-    if (statusMatch) {
-        if (!state.supervisorUp) {
-            return json(res, 503, { detail: 'mock-gc supervisor is down' })
-        }
-        const lite = url.searchParams.get('lite') === 'true'
-        return json(res, 200, {
-            name: state.city.name,
-            path: state.city.path,
-            agent_count: state.city.agents.total,
-            agents: state.city.agents,
-            sessions: state.city.sessions,
-            mail: state.city.mail,
-            work: state.city.work,
-            partial: false,
-            ...(lite
-                ? {}
-                : { beads_version: '0.9.1-mock', dolt_version: '1.30.0-mock' }),
-        })
-    }
-    const healthMatch = route.match(/^GET \/v0\/city\/([^/]+)\/health$/)
-    if (healthMatch) {
-        if (!state.supervisorUp) {
-            return json(res, 503, { detail: 'mock-gc supervisor is down' })
-        }
-        return json(res, 200, {
-            status: 'ok',
-            agent_count: state.city.agents.total,
-            agents: state.city.agents,
-        })
-    }
-    if (route === 'GET /v0/events') {
-        if (!state.supervisorUp) {
-            return json(res, 503, { detail: 'mock-gc supervisor is down' })
-        }
-        // Cheap history tail. `since` is a Go duration like "1h" – we ignore it
-        // and just return the last `limit` events (default 100).
-        const limit = Number(url.searchParams.get('limit') ?? '100')
-        const tail = state.events.slice(-limit)
-        return json(res, 200, { events: tail })
-    }
-    // City sessions list — drives the sessions table on the home page.
-    // Mock returns an empty list unless the city is running, mirroring
-    // the real `gc` behaviour where sessions only exist for an active
-    // city. Tests that need non-empty data override the city state via
-    // `POST /v0/city` (which sets a deterministic session count).
-    const sessionsMatch = route.match(/^GET \/v0\/city\/([^/]+)\/sessions$/)
-    if (sessionsMatch) {
-        if (!state.supervisorUp) {
-            return json(res, 503, { detail: 'mock-gc supervisor is down' })
-        }
-        const name = decodeURIComponent(sessionsMatch[1])
-        if (name !== state.city.name) {
-            return json(res, 404, { detail: `city "${name}" not registered` })
-        }
-        if (state.city.phase !== 'running') {
-            return json(res, 200, { items: [] })
-        }
-        const items = Array.from({ length: state.city.sessions.total }).map(
-            (_, i) => ({
-                name: `mock-session-${i + 1}`,
-                agent: 'mock-agent',
-                provider: 'mock',
-                status: i < state.city.sessions.running ? 'running' : 'idle',
-                started_at: state.city.startedAt,
-                last_activity_at: new Date().toISOString(),
-            }),
-        )
-        return json(res, 200, { items })
+        return (req, res, url) => handleUnregisterCity(req, res, unregisterMatch[1])
     }
 
-    // Fall-through: everything else is unimplemented (e.g. agent / session
-    // / sling / mail endpoints the test doesn't drive). Return 404 rather
-    // than crashing the mock — the console's per-handler try/catch degrades.
-    json(res, 404, { detail: `mock-gc: ${route} not implemented` })
-})
+    const statusMatch = route.match(/^GET \/v0\/city\/([^/]+)\/status$/)
+    if (statusMatch) {
+        return (req, res, url) => handleGetCityStatus(req, res, url, statusMatch[1])
+    }
+
+    const healthMatch = route.match(/^GET \/v0\/city\/([^/]+)\/health$/)
+    if (healthMatch) {
+        return (req, res, url) => handleGetCityHealth(req, res)
+    }
+
+    const sessionsMatch = route.match(/^GET \/v0\/city\/([^/]+)\/sessions$/)
+    if (sessionsMatch) {
+        return (req, res, url) => handleGetCitySessionsList(req, res, sessionsMatch[1])
+    }
+
+    return null
+}
+
+async function handleReset(req: IncomingMessage, res: ServerResponse): Promise<void> {
+    state = freshState()
+    return json(res, 200, { ok: true })
+}
+
+async function handleHealth(req: IncomingMessage, res: ServerResponse): Promise<void> {
+    if (!state.supervisorUp) {
+        return json(res, 503, { detail: 'mock-gc supervisor is down' })
+    }
+    return json(res, 200, {
+        status: 'ok',
+        build_id: `mock-${SUPERVISOR_VERSION}`,
+        cities_running: state.city.phase === 'running' ? 1 : 0,
+        cities_total: 1,
+    })
+}
+
+async function handleGetCities(req: IncomingMessage, res: ServerResponse): Promise<void> {
+    if (!state.supervisorUp) {
+        return json(res, 503, { detail: 'mock-gc supervisor is down' })
+    }
+    return json(res, 200, {
+        items: [
+            {
+                name: state.city.name,
+                dir: state.city.path,
+                status: state.city.phase,
+                active: state.city.phase === 'running',
+            },
+        ],
+    })
+}
+
+async function handleSupervisorStart(req: IncomingMessage, res: ServerResponse): Promise<void> {
+    if (state.supervisorUp) {
+        return json(res, 200, { detail: 'already running' })
+    }
+    state.supervisorUp = true
+    resetCityState()
+    recordEvent('supervisor.started', { version: SUPERVISOR_VERSION })
+    return json(res, 200, { status: 'ok' })
+}
+
+async function handleSupervisorStop(req: IncomingMessage, res: ServerResponse): Promise<void> {
+    if (!state.supervisorUp) {
+        return json(res, 200, { detail: 'already stopped' })
+    }
+    state.supervisorUp = false
+    state.city.phase = 'stopped'
+    resetCityState()
+    recordEvent('supervisor.stopped', {})
+    return json(res, 200, { status: 'ok' })
+}
+
+async function handleSupervisorRestart(req: IncomingMessage, res: ServerResponse): Promise<void> {
+    state.supervisorUp = false
+    state.city.phase = 'stopped'
+    resetCityState()
+    recordEvent('supervisor.stopped', {})
+    setTimeout(() => {
+        state.supervisorUp = true
+        recordEvent('supervisor.started', { version: SUPERVISOR_VERSION })
+    }, 50)
+    return json(res, 200, { status: 'ok' })
+}
+
+function resetCityState(): void {
+    state.city.phase = 'stopped'
+    state.city.agents = { total: 0, running: 0, idle: 0, suspended: 0, error: 0 }
+    state.city.sessions = { total: 0, running: 0, idle: 0 }
+    state.city.mail = { total: 0, unread: 0 }
+    state.city.work = { open: 0, closed: 0 }
+}
+
+async function handlePostCity(req: IncomingMessage, res: ServerResponse): Promise<void> {
+    if (!req.headers['x-gc-request']) {
+        return json(res, 403, { detail: 'X-GC-Request header required' })
+    }
+    if (!state.supervisorUp) {
+        return json(res, 503, { detail: 'mock-gc supervisor is down' })
+    }
+    if (state.city.phase === 'running') {
+        return json(res, 409, { detail: `city "${state.city.name}" already running` })
+    }
+    state.city.phase = 'running'
+    state.city.startedAt = new Date().toISOString()
+    state.city.agents = { total: 3, running: 2, idle: 1, suspended: 0, error: 0 }
+    state.city.sessions = { total: 3, running: 2, idle: 1 }
+    state.city.mail = { total: 5, unread: 2 }
+    state.city.work = { open: 4, closed: 12 }
+    return asyncAccepted(req, res, 'city.create', { city: state.city.name })
+}
+
+async function handleUnregisterCity(req: IncomingMessage, res: ServerResponse, name: string): Promise<void> {
+    if (!req.headers['x-gc-request']) {
+        return json(res, 403, { detail: 'X-GC-Request header required' })
+    }
+    if (!state.supervisorUp) {
+        return json(res, 503, { detail: 'mock-gc supervisor is down' })
+    }
+    if (name !== state.city.name) {
+        return json(res, 404, { detail: `city "${name}" not registered` })
+    }
+    if (state.city.phase === 'stopped') {
+        return json(res, 409, { detail: `city "${name}" not running` })
+    }
+    state.city.phase = 'stopped'
+    state.city.stoppedAt = new Date().toISOString()
+    resetCityState()
+    return asyncAccepted(req, res, 'city.unregister', { city: name })
+}
+
+async function handleGetCityStatus(req: IncomingMessage, res: ServerResponse, url: URL, name: string): Promise<void> {
+    if (!state.supervisorUp) {
+        return json(res, 503, { detail: 'mock-gc supervisor is down' })
+    }
+    const lite = url.searchParams.get('lite') === 'true'
+    return json(res, 200, {
+        name: state.city.name,
+        path: state.city.path,
+        agent_count: state.city.agents.total,
+        agents: state.city.agents,
+        sessions: state.city.sessions,
+        mail: state.city.mail,
+        work: state.city.work,
+        partial: false,
+        ...(lite ? {} : { beads_version: '0.9.1-mock', dolt_version: '1.30.0-mock' }),
+    })
+}
+
+async function handleGetCityHealth(req: IncomingMessage, res: ServerResponse): Promise<void> {
+    if (!state.supervisorUp) {
+        return json(res, 503, { detail: 'mock-gc supervisor is down' })
+    }
+    return json(res, 200, {
+        status: 'ok',
+        agent_count: state.city.agents.total,
+        agents: state.city.agents,
+    })
+}
+
+async function handleGetEvents(req: IncomingMessage, res: ServerResponse): Promise<void> {
+    if (!state.supervisorUp) {
+        return json(res, 503, { detail: 'mock-gc supervisor is down' })
+    }
+    const url = new URL(req.url ?? '/', `http://127.0.0.1:${PORT}`)
+    const limit = Number(url.searchParams.get('limit') ?? '100')
+    const tail = state.events.slice(-limit)
+    return json(res, 200, { events: tail })
+}
+
+async function handleGetCitySessionsList(req: IncomingMessage, res: ServerResponse, name: string): Promise<void> {
+    if (!state.supervisorUp) {
+        return json(res, 503, { detail: 'mock-gc supervisor is down' })
+    }
+    if (name !== state.city.name) {
+        return json(res, 404, { detail: `city "${name}" not registered` })
+    }
+    if (state.city.phase !== 'running') {
+        return json(res, 200, { items: [] })
+    }
+    const items = Array.from({ length: state.city.sessions.total }).map(
+        (_, i) => ({
+            name: `mock-session-${i + 1}`,
+            agent: 'mock-agent',
+            provider: 'mock',
+            status: i < state.city.sessions.running ? 'running' : 'idle',
+            started_at: state.city.startedAt,
+            last_activity_at: new Date().toISOString(),
+        }),
+    )
+    return json(res, 200, { items })
+}
 
 /**
  * Write a small `gc` shim to a temp dir. The shim maps CLI subcommands
