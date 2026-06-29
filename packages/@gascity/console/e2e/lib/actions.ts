@@ -290,8 +290,8 @@ export class E2EActions {
 
       if (!agentFound) {
         // Use first real agent (skip "choose…")
-        for (let i = 0; i < agentOptions.length; i++) {
-          const optText = await agentOptions[i].textContent();
+        for (const agentOption of agentOptions) {
+          const optText = await agentOption.textContent();
           if (optText && optText !== 'choose…') {
             agentToUse = optText;
             console.log(`Using first available agent: ${agentToUse}`);

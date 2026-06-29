@@ -85,9 +85,7 @@ function BeadsPage() {
                     "font-mono text-[11px]",
                     b.status === "closed"
                       ? "text-muted-foreground line-through"
-                      : b.status === "in_progress"
-                        ? "text-foreground"
-                        : "text-foreground",
+                      : "text-foreground",
                   )}
                 >
                   {b.status}
