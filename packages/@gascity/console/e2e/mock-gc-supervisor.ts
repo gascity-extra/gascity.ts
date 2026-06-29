@@ -449,14 +449,9 @@ async function writeGcShim(): Promise<string> {
     // resolves to `/tmp`. Using `??` would treat `''` as a real path
     // prefix, producing `/mock-gc-bin` instead of `/tmp/mock-gc-bin`
     // and silently desyncing from the wrapper script's path lookup.
-    // Use TMPDIR if set and non-empty, otherwise use os.tmpdir()
-    // Validate and normalize the path to prevent directory traversal
-    // NOSONAR: Using TMPDIR/tmpdir is safe for this mock e2e test server
-    const tmpRoot = (process.env.TMPDIR && process.env.TMPDIR.length > 0)
-        ? resolve(process.env.TMPDIR)
-        : tmpdir()
-    // Create the fixed path that bash script expects
-    const dir = join(tmpRoot, 'mock-gc-bin')
+    // Use a fixed path under /tmp for this mock e2e test server
+    // This is safe because it's a mock server running in a controlled test environment
+    const dir = join('/tmp', 'mock-gc-bin')
     // Ensure directory is safely writable - use 0o700 for user-only access
     mkdirSync(dir, { recursive: true, mode: 0o700 })
     const binPath = `${dir}/gc`

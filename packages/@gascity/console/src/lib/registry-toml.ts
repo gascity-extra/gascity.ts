@@ -39,7 +39,16 @@ export interface RegistryDocument {
 }
 
 const SECTION_RE = /^\[\[([^\]]+)\]\]$/
-const KV_RE = /^([a-zA-Z_][\w-]*)\s*=\s*(.+)$/
+
+function parseKeyValue(line: string): [string, string] | null {
+  const eqIdx = line.indexOf('=')
+  if (eqIdx < 0) return null
+  const key = line.slice(0, eqIdx).trim()
+  const value = line.slice(eqIdx + 1).trim()
+  // Validate key pattern: starts with letter or underscore, followed by word chars or hyphen
+  if (!/^[a-zA-Z_][\w-]*$/.test(key)) return null
+  return [key, value]
+}
 
 function stripInlineComment(value: string): string {
   const idx = value.indexOf('#')
@@ -91,12 +100,11 @@ export function parseRegistryToml(text: string): RegistryDocument {
       continue
     }
 
-    const kv = KV_RE.exec(line)
+    const kv = parseKeyValue(line)
     if (!kv) {
       throw new Error(`registry.toml line ${i + 1}: cannot parse line: ${rawLine}`)
     }
-    const key = kv[1]
-    const value = coerceScalar(kv[2])
+    const [key, value] = kv
 
     handleKeyValue(key, value, path, doc, packsByName, currentRelease, i)
   }
