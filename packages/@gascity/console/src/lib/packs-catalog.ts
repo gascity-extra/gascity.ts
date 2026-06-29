@@ -33,7 +33,8 @@ export function derivePackName(source: string): string {
   const dslIdx = cleaned.indexOf('//')
   let tail = dslIdx >= 0 ? cleaned.slice(dslIdx + 2) : cleaned
   // GitHub tree/<ref>/<path> form.
-  const treeMatch = tail.match(/\/tree\/[^/]+\/(.+)$/)
+  const TREE_RE = /\/tree\/[^/]+\/(.+)$/
+  const treeMatch = TREE_RE.exec(tail)
   if (treeMatch) tail = treeMatch[1]
   // Drop trailing slashes.
   tail = tail.replace(/\/+$/, '')

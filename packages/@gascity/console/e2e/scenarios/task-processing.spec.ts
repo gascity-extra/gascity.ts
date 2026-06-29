@@ -203,8 +203,13 @@ test.describe('Task Processing Automation', () => {
       // Check if formula created beads
       const beads = await actions.getBeadList('all');
       console.log(`Beads after formula run: ${beads.length}`);
+
+      // Assert that we found formulas or beads
+      expect(formulas.length).toBeGreaterThan(0);
     } else {
       console.log('No formulas available to test');
+      // Skip test if no formulas available
+      test.skip();
     }
   });
 

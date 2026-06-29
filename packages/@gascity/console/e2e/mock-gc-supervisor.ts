@@ -138,8 +138,7 @@ function freshState(): State {
         city: {
             name: 'default',
             phase: 'stopped',
-            // NOSONAR: Using /tmp is safe for this mock e2e test server
-            path: '/tmp/gc-mock/default',
+            path: '/tmp/gc-mock/default', // NOSONAR: safe for mock e2e test server
             agents: { total: 0, running: 0, idle: 0, suspended: 0, error: 0 },
             sessions: { total: 0, running: 0, idle: 0 },
             mail: { total: 0, unread: 0 },
@@ -452,8 +451,9 @@ async function writeGcShim(): Promise<string> {
     // and silently desyncing from the wrapper script's path lookup.
     // Use TMPDIR if set and non-empty, otherwise use os.tmpdir()
     // Validate and normalize the path to prevent directory traversal
+    // NOSONAR: Using TMPDIR/tmpdir is safe for this mock e2e test server
     const tmpRoot = (process.env.TMPDIR && process.env.TMPDIR.length > 0)
-        ? resolve(process.env.TMPDIR) // NOSONAR: safe for mock e2e test server
+        ? resolve(process.env.TMPDIR)
         : tmpdir()
     // Create the fixed path that bash script expects
     const dir = join(tmpRoot, 'mock-gc-bin')

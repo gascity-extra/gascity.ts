@@ -83,7 +83,7 @@ export function parseRegistryToml(text: string): RegistryDocument {
     const line = rawLine.trim()
     if (shouldSkipLine(line)) continue
 
-    const sectionMatch = line.match(SECTION_RE)
+    const sectionMatch = SECTION_RE.exec(line)
     if (sectionMatch) {
       const result = handleSection(sectionMatch[1], path, doc, currentRelease, i)
       path = result.path
