@@ -591,9 +591,13 @@ async function stopCityImpl(cityName: string): Promise<{
       ok: false,
       error: silentIfOffline(error)
         ? 'gas city supervisor is not reachable'
-        : (error instanceof Error ? error.message : String(error)),
+        : getHealthErrorMessage(error),
     }
   }
+}
+
+function getHealthErrorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error)
 }
 
 export const gcCityStart = createServerFn({ method: 'POST' })
@@ -718,7 +722,7 @@ export const gcCityStatus = createServerFn({ method: 'GET' })
           mail: { total: 0, unread: 0 },
           work: { open: 0, closed: 0 },
           partial: false,
-          error: silentIfOffline(error) ? 'gas city supervisor is not reachable' : (error instanceof Error ? error.message : String(error)),
+          error: silentIfOffline(error) ? 'gas city supervisor is not reachable' : getHealthErrorMessage(error),
         }
       }
     })
@@ -807,12 +811,17 @@ export const gcSupervisorLogs = createServerFn({ method: 'GET' })
       return {
         output: silentIfOffline(error)
           ? '(supervisor offline — no logs available)'
-          : `failed to read supervisor logs: ${error instanceof Error ? error.message : String(error)}`,
+          : getLogErrorMessage(error),
         source: 'gc://v0/events?since=1h',
         lines: 0,
       }
     }
   })
+}
+
+function getLogErrorMessage(error: unknown): string {
+  return `failed to read supervisor logs: ${error instanceof Error ? error.message : String(error)}`
+}
 
 // Supervisor daemon lifecycle
 // -----------------------------------------------------------------------------
