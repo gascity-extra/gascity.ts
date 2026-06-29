@@ -5,7 +5,7 @@ import { useState } from "react";
 import clsx from "clsx";
 
 import { AppShell } from "@/components/AppShell";
-import { gcCloseBead, gcListBeads } from "@/server/gc.functions";
+import { gcCloseBead, gcListBeads } from "@/../server/gc.functions";
 
 export const Route = createFileRoute("/beads")({
   head: () => ({ meta: [{ title: "Beads — gc console" }] }),
