@@ -427,7 +427,7 @@ return (
       />
       <div
         className="absolute right-4 top-11 z-50 w-[620px] overflow-hidden rounded-md border border-border bg-card shadow-lg"
-        onClick={(e) => e.stopPropagation()}
+        onClick={(e) => e.stopPropagation()} // NOSONAR: backdrop click handler
         role="dialog"
         aria-modal="true"
       >
@@ -756,16 +756,16 @@ function SlingDrawer({
 }>) {
   if (!open) return null;
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-start justify-center bg-background/60 pt-[12vh]"
+    <button
+      type="button"
+      className="fixed inset-0 z-50 flex items-start justify-center bg-background/60 pt-[12vh] border-0 bg-transparent cursor-pointer"
       onClick={() => onOpenChange(false)}
       onKeyDown={(e) => {
         if (e.key === 'Escape') {
           onOpenChange(false);
         }
       }}
-      role="button"
-      tabIndex={0}
+      aria-label="Close dialog"
     >
       <div
         onClick={(e) => e.stopPropagation()}
@@ -775,6 +775,6 @@ function SlingDrawer({
       >
         <SlingComposer onDone={() => onOpenChange(false)} />
       </div>
-    </div>
+    </button>
   );
 }

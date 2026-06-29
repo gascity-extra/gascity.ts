@@ -87,5 +87,9 @@ test.describe('Mail Tests', () => {
     // Close compose drawer
     await composeButton.click();
     await page.waitForTimeout(500);
+
+    // Verify compose drawer is closed
+    const drawer = page.locator('[role="dialog"]');
+    expect(await drawer.count()).toBe(0);
   });
 });

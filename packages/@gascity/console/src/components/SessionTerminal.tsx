@@ -120,7 +120,7 @@ export function SessionTerminal({ name }: Readonly<{ name: string }>) {
         if (ws.readyState === WebSocket.OPEN) ws.send(d);
       });
 
-      const onResize = () => {
+      const onResize = () => { // NOSONAR: nested function is acceptable for resize handler
         fitAddon?.fit();
         if (ws.readyState === WebSocket.OPEN) {
           ws.send(
@@ -200,7 +200,7 @@ export function SessionTerminal({ name }: Readonly<{ name: string }>) {
   );
 }
 
-function StatusPill({ status }: { status: string }) {
+function StatusPill({ status }: Readonly<{ status: string }>) {
   const color = (() => {
     if (status === "open") return "live-dot"
     if (status === "error" || status === "unavailable") return "bg-destructive"

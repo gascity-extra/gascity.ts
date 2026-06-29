@@ -329,7 +329,7 @@ export class E2EActions {
       };
 
       // Escape the text properly for shell
-      const escapedText = text.replace(/"/g, '\\"');
+      const escapedText = text.replaceAll('"', '\\"');
 
       // Don't use --json as it doesn't output JSON in this version
       const cmd = `gc sling ${agent} "${escapedText}"`;

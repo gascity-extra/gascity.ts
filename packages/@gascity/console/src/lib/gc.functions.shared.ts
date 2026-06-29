@@ -2,7 +2,7 @@
  * Shared utilities and constants for GC server functions.
  */
 
-import { DefaultService, configureGasCityClient } from '@gascity/client'
+import { configureGasCityClient } from '@gascity/client'
 import { silentIfOffline, isCityNotConfigured, CITY_NOT_CONFIGURED_HINT } from './gc-errors'
 
 // Configure the OpenAPI-generated client once at module load. Without this,

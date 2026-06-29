@@ -207,6 +207,14 @@ function InitCityDialog({
     <div
       className="fixed inset-0 z-50 flex items-start justify-center bg-background/70 pt-[8vh]"
       onClick={onClose}
+      onKeyDown={(e) => {
+        if (e.key === 'Escape') {
+          onClose();
+        }
+      }}
+      role="button"
+      tabIndex={0}
+      aria-label="Close dialog"
     >
       <div
         onClick={(e) => e.stopPropagation()}
@@ -224,10 +232,11 @@ function InitCityDialog({
           </Link>
         </div>
         <div className="px-4 py-3">
-          <label className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
+          <label htmlFor="city-path" className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
             city path
           </label>
           <input
+            id="city-path"
             autoFocus
             value={path}
             onChange={(e) => setPath(e.target.value)}

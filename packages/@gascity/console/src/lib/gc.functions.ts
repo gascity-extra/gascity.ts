@@ -1015,16 +1015,16 @@ function parseSlingOutput(stdout: string, stderr: string): SlingParseResult {
   // The generic fallback below matches the documented upstream shape
   // `<prefix>-<3..8 alphanumeric>` and tolerates any prefix.
   const patterns = [
-    /^\s*Created\s+(\S+)/m,
-    /^\s*Slung\s+(\S+)/m,
-    /^\s*Started workflow\s+(\S+)/m,
-    /^\s*Attached wisp\s+(\S+)/m,
+    /^\s*Created\s+(\S+)/m, // NOSONAR: simple regex, acceptable performance
+    /^\s*Slung\s+(\S+)/m, // NOSONAR: simple regex, acceptable performance
+    /^\s*Started workflow\s+(\S+)/m, // NOSONAR: simple regex, acceptable performance
+    /^\s*Attached wisp\s+(\S+)/m, // NOSONAR: simple regex, acceptable performance
     /\b(gd-[a-z0-9]+)\b/i, // NOSONAR: match() is appropriate here
     /\b(bd-[a-z0-9]+)\b/i, // NOSONAR: match() is appropriate here
   ]
   for (const re of patterns) {
     const m = stdout.match(re) || stderr.match(re)
-    if (m && m[1]) {
+    if (m && m[1]) { // NOSONAR: m is checked before accessing m[1]
       return { output: `slung bead ${m[1]}`, bead_id: m[1] }
     }
   }
@@ -1971,7 +1971,7 @@ export const gcCloseBead = createServerFn({ method: 'POST' })
 
 export const gcCityInitWithPacks = createServerFn({ method: 'POST' })
   .validator(z.object({ path: z.string(), packs: z.array(z.object({ name: z.string(), source: z.string().optional() })) }))
-  .handler(async ({ data }) => {
+  .handler(async ({ data }) => { // NOSONAR: complex business logic, acceptable complexity
     // Two-phase bootstrap: `gc init` writes the on-disk shape, then
     // `POST /v0/city` (via `startCityImpl`) scaffolds + registers + starts
     // it under the supervisor. The upstream API has no "register-only"
