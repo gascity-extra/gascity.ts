@@ -434,10 +434,13 @@ async function writeGcShim(): Promise<string> {
     // resolves to `/tmp`. Using `??` would treat `''` as a real path
     // prefix, producing `/mock-gc-bin` instead of `/tmp/mock-gc-bin`
     // and silently desyncing from the wrapper script's path lookup.
+    // Validate TMPDIR to prevent directory traversal attacks
     const tmpRoot = process.env.TMPDIR && process.env.TMPDIR.length > 0
         ? process.env.TMPDIR
         : '/tmp'
-    const dir = `${tmpRoot}/mock-gc-bin`
+    // Ensure tmpRoot is an absolute path and doesn't contain parent directory references
+    const safeTmpRoot = require('path').resolve(tmpRoot)
+    const dir = `${safeTmpRoot}/mock-gc-bin`
     // Ensure directory is safely writable - use 0o700 for user-only access
     mkdirSync(dir, { recursive: true, mode: 0o700 })
     const binPath = `${dir}/gc`
