@@ -21,7 +21,7 @@ function isJsonObject(v: unknown): v is JsonObject {
 
 function tryParseJson(text: string): JsonObject | null {
   const trimmed = text.trim()
-  if (trimmed.length === 0 || trimmed[0] !== '{') return null
+  if (trimmed.length === 0 || !trimmed.startsWith('{')) return null
   try {
     const v: unknown = JSON.parse(trimmed)
     return isJsonObject(v) ? v : null

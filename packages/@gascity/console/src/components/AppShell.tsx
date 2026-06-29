@@ -105,6 +105,11 @@ export function AppShell({ children }: { children: ReactNode }) {
 // and what we can do about it (start / stop / restart).
 type Phase = "down" | "up" | "starting" | "stopping";
 
+function isPlaceholderText(text: string, logOutput: string | undefined): boolean {
+  if (text !== logOutput) return true;
+  return logOutput?.startsWith('(no supervisor events') ?? false;
+}
+
 // localStorage key for the operator's chosen city directory. Persisted
 // across reloads so they don't have to re-type it every time they open
 function Header({
@@ -342,11 +347,6 @@ function SupervisorPopover({
     setConsole((c) =>
       (c ? c + "\n\n" : "") + `[${ts}] ${cmd}\n${out.trim() || "(no output)"}`,
     );
-  }
-
-  function isPlaceholderText(text: string, logOutput: string | undefined): boolean {
-    if (text !== logOutput) return true;
-    return logOutput?.startsWith('(no supervisor events') ?? false;
   }
 
   // The popover only controls the supervisor. Start maps to

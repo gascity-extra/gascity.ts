@@ -197,12 +197,12 @@ function handlePackKey(
     packsByName.set(value, pack)
   } else if (key === 'description') {
     if (typeof value !== 'string') {
-      throw new Error(`registry.toml line ${lineIndex + 1}: description must be a string`)
+      throw new TypeError(`registry.toml line ${lineIndex + 1}: description must be a string`)
     }
     pack.description = value
   } else if (key === 'source') {
     if (typeof value !== 'string' || value.length === 0) {
-      throw new Error(`registry.toml line ${lineIndex + 1}: source must be a non-empty string`)
+      throw new TypeError(`registry.toml line ${lineIndex + 1}: source must be a non-empty string`)
     }
     pack.source = value
   } else if (key === 'source_kind' || key === 'sourceKind') {
