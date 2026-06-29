@@ -62,18 +62,38 @@ function summariseRefresh(obj: JsonObject, raw: string): string | null {
   const pruned = obj.pruned_caches === true
   const failureCount = failures.length
   const target = asString(obj.target)
+
   const pieces: string[] = []
-  const scope = target ? `registry "${target}"` : `${refreshedCount} ${refreshedCount === 1 ? 'registry' : 'registries'}`
-  pieces.push(
-    refreshedCount > 0
-      ? `refreshed ${scope}${totalPacks > 0 ? ` (${totalPacks} pack${totalPacks === 1 ? '' : 's'})` : ''}`
-      : `refreshed ${scope} (no changes)`,
-  )
-  if (failureCount > 0) {
-    pieces.push(`${failureCount} failure${failureCount === 1 ? '' : 's'}`)
-  }
-  if (pruned) pieces.push('pruned cache')
+  const scope = getRefreshScope(refreshedCount, target)
+  pieces.push(getRefreshMessage(refreshedCount, scope, totalPacks))
+  addFailureMessage(pieces, failureCount)
+  addPrunedMessage(pieces, pruned)
+
   return pieces.join('; ')
+}
+
+function getRefreshScope(count: number, target: string | null): string {
+  if (target) return `registry "${target}"`
+  const plural = count === 1 ? 'registry' : 'registries'
+  return `${count} ${plural}`
+}
+
+function getRefreshMessage(count: number, scope: string, totalPacks: number): string {
+  if (count === 0) return `refreshed ${scope} (no changes)`
+  if (totalPacks === 0) return `refreshed ${scope}`
+  const packPlural = totalPacks === 1 ? '' : 's'
+  return `refreshed ${scope} (${totalPacks} pack${packPlural})`
+}
+
+function addFailureMessage(pieces: string[], count: number): void {
+  if (count > 0) {
+    const plural = count === 1 ? '' : 's'
+    pieces.push(`${count} failure${plural}`)
+  }
+}
+
+function addPrunedMessage(pieces: string[], pruned: boolean): void {
+  if (pruned) pieces.push('pruned cache')
 }
 
 /**

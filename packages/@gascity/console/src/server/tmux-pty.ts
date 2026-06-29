@@ -175,22 +175,8 @@ export function handleBrowserMessage(pty: IPty, raw: unknown): void {
   if (typeof raw === "string") {
     const trimmed = raw.trimStart();
     if (trimmed.startsWith("{")) {
-      try {
-        const msg = JSON.parse(trimmed);
-        if (msg && msg.type === "resize") {
-          const cols = Number(msg.cols);
-          const rows = Number(msg.rows);
-          if (
-            Number.isInteger(cols) && cols >= 10 && cols <= 512 &&
-            Number.isInteger(rows) && rows >= 5 && rows <= 256
-          ) {
-            pty.resize(cols, rows);
-          }
-          return;
-        }
-      } catch {
-        /* not JSON — fall through to write() */
-      }
+      const handled = tryHandleResizeMessage(pty, trimmed);
+      if (handled) return;
     }
     pty.write(raw);
     return;
@@ -199,10 +185,30 @@ export function handleBrowserMessage(pty: IPty, raw: unknown): void {
     pty.write(Buffer.from(raw).toString("utf8"));
     return;
   }
-  if (Array.isArray(raw)) {
-    // ws sometimes delivers Buffer[] for fragmented messages.
-    pty.write(Buffer.concat(raw).toString("utf8"));
+}
+
+function tryHandleResizeMessage(pty: IPty, trimmed: string): boolean {
+  try {
+    const msg = JSON.parse(trimmed);
+    if (msg && msg.type === "resize") {
+      const cols = Number(msg.cols);
+      const rows = Number(msg.rows);
+      if (isValidResize(cols, rows)) {
+        pty.resize(cols, rows);
+        return true;
+      }
+    }
+  } catch {
+    /* not JSON — fall through */
   }
+  return false;
+}
+
+function isValidResize(cols: number, rows: number): boolean {
+  return (
+    Number.isInteger(cols) && cols >= 10 && cols <= 512 &&
+    Number.isInteger(rows) && rows >= 5 && rows <= 256
+  );
 }
 
 /**
