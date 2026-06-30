@@ -1,7 +1,7 @@
 import { test, expect } from '@playwright/test';
 
 test.describe('GC Integration Tests', () => {
-  test('console-ui loads with GC environment configured', async ({ page }) => {
+  test('console-ui loads with GC environment configured', async ({ page, baseURL }) => {
     // Navigate to console-ui
     await page.goto('/');
     
@@ -13,7 +13,7 @@ test.describe('GC Integration Tests', () => {
     await expect(body).toBeVisible();
   });
 
-  test('console-ui displays GC connection status', async ({ page }) => {
+  test('console-ui displays GC connection status', async ({ page, baseURL }) => {
     await page.goto('/');
     
     // Wait for the page to load
@@ -30,7 +30,7 @@ test.describe('GC Integration Tests', () => {
     expect(pageContent.toLowerCase()).toMatch(/session|gc|console/);
   });
 
-  test('can navigate to sessions page', async ({ page }) => {
+  test('can navigate to sessions page', async ({ page, baseURL }) => {
     await page.goto('/');
     
     // The current page should be the sessions page based on the title

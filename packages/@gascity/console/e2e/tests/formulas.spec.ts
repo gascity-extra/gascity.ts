@@ -1,82 +1,68 @@
 import { test, expect } from '@playwright/test';
 
 test.describe('Formulas Tests', () => {
-  test.beforeEach(async ({ page }) => {
-    await page.goto('http://localhost:8080');
+  test.beforeEach(async ({ page, baseURL }) => {
+    await page.goto(`${baseURL}/`);
     await page.waitForLoadState('domcontentloaded');
   });
 
-  test('navigate to formulas page', async ({ page }) => {
-    // Navigate to formulas page
-    await page.goto('http://localhost:8080/formulas');
+  test('navigate to formulas page', async ({ page, baseURL }) => {
+    await page.goto(`${baseURL}/formulas`);
     await page.waitForLoadState('domcontentloaded');
-    
-    // Check that we're on formulas page
     await expect(page).toHaveURL(/\/formulas/);
-    
-    // Check that the page has content
+
     const body = page.locator('body');
     await expect(body).toBeVisible();
   });
 
-  test('formulas page displays formula list', async ({ page }) => {
-    // Navigate to formulas page
-    await page.goto('http://localhost:8080/formulas');
+  test('formulas page displays formula list', async ({ page, baseURL }) => {
+    await page.goto(`${baseURL}/formulas`);
     await page.waitForLoadState('domcontentloaded');
-    
-    // Look for formula-related content
+
     const pageContent = await page.content();
     expect(pageContent.toLowerCase()).toMatch(/formulas|contract/);
   });
 
-  test('can navigate to formula detail', async ({ page }) => {
-    // Navigate to formulas page
-    await page.goto('http://localhost:8080/formulas');
+  test('can navigate to formula detail', async ({ page, baseURL }) => {
+    await page.goto(`${baseURL}/formulas`);
     await page.waitForLoadState('domcontentloaded');
-    
-    // Look for formula links
-    const formulaLinks = page.locator('a').filter({ hasText: /^[\w-]+$/ });
-    const count = await formulaLinks.count();
-    
+
+    // Formulas are rendered as `<Link to="/formulas/$name">` so the href
+    // pattern is stable: target links that start with `/formulas/` and
+    // have a name suffix (i.e. not just the index page itself).
+    const detailLinks = page.locator('a[href^="/formulas/"]').filter({
+      hasNot: page.locator('text=formulas'),
+    });
+    const count = await detailLinks.count();
+
     if (count > 0) {
-      // Click on first formula link
-      await formulaLinks.first().click();
-      
-      // Wait for navigation
+      await detailLinks.first().click();
       await page.waitForLoadState('domcontentloaded');
-      
-      // Verify we're on a formula detail page
-      await expect(page).toHaveURL(/\/formulas\/.+/);
+      await expect(page).toHaveURL(/\/formulas\/[^/]+/);
     } else {
-      // No formulas available
       console.log('No formulas to view');
     }
   });
 
-  test('formula detail has run button', async ({ page }) => {
-    // Navigate to formulas page
-    await page.goto('http://localhost:8080/formulas');
+  test('formula detail has run button', async ({ page, baseURL }) => {
+    await page.goto(`${baseURL}/formulas`);
     await page.waitForLoadState('domcontentloaded');
-    
-    // Look for formula links
-    const formulaLinks = page.locator('a').filter({ hasText: /^[\w-]+$/ });
-    const count = await formulaLinks.count();
-    
+
+    const detailLinks = page.locator('a[href^="/formulas/"]');
+    const count = await detailLinks.count();
+
     if (count > 0) {
-      // Click on first formula link
-      await formulaLinks.first().click();
+      await detailLinks.first().click();
       await page.waitForLoadState('domcontentloaded');
-      
-      // Look for run button
-      const runButton = page.getByText('run');
+
+      const runButton = page.getByRole('button', { name: /run/i });
       if (await runButton.count() > 0) {
-        await expect(runButton).toBeVisible();
+        await expect(runButton.first()).toBeVisible();
       }
-      
-      // Look for live toggle
+
       const liveButton = page.getByText(/live/);
       if (await liveButton.count() > 0) {
-        await expect(liveButton).toBeVisible();
+        await expect(liveButton.first()).toBeVisible();
       }
     }
   });

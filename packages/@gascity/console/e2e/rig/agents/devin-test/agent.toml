@@ -1,0 +1,93 @@
+# gascity-e2e-agent.toml
+#
+# Rig agent config for the console's `sling-pickup` E2E scenario
+# (`packages/@gascity/console/e2e/scenarios/sling-pickup.spec.ts`).
+#
+# Goal: prove the full pipeline
+#   UI `+ sling task`  →  gcSling server fn  →  `gc sling` CLI
+#     →  supervisor dispatches rig  →  rig spawns `devin`
+#     →  devin writes /tmp/gc-e2e-<runId>/marker  →  exit 0
+#     →  bead closes.
+#
+# Harness: Devin CLI (2026.8.18+), non-interactive mode
+# (`devin -p "<prompt>"`). Devin discovers its own provider/key from
+# `~/.config/devin/` — no API key is hardcoded here, which is the same
+# design property the original Kilo-based draft in the plan aimed for.
+#
+# Invocation shape, per DeepWiki recon against
+# `gastownhall/gascity` `internal/runtime/subprocess/subprocess.go:107-147`
+# and `internal/runtime/runtime.go:681-696`:
+#
+#   1. The provider/rig command is run as `sh -c "<start_command>"`.
+#      There is NO `$TASK` / `$BEAD_ID` shell substitution; the agent
+#      discovers its work through the beads store (the supervisor
+#      publishes `GC_SESSION_ID`, `GC_AGENT`, etc. as env).
+#   2. `cwd` is `cfg.WorkDir` — for rig-scoped agents that resolves
+#      to the rig's repo directory by default. For the e2e city
+#      created under `/tmp/gc-e2e-<runId>` that's fine.
+#   3. The agent owns bead lifecycle — the supervisor does NOT
+#      auto-close a bead on rig exit 0. The agent itself must run
+#      `gc bd close <id>` (or `bd close <id>`) on the assigned bead
+#      before exiting.
+#
+# To keep the rig self-contained and skip the `bd` round-trip (which
+# would require `bd` to be reachable from inside the rig session —
+# fragile in this devcontainer), the `start_command` hard-codes the
+# same marker-writing behaviour the spec slings. The marker path is
+# derived from the city path which the supervisor publishes as
+# `GC_CITY_PATH`. We deliberately do NOT consume the bead text the
+# user typed into the composer — for this scenario, the rig agent is
+# a fixed, deterministic responder.
+#
+# The matching `prompt.template.md` ships in the same directory and
+# is referenced from `city.toml` via the absolute path
+# `//agents/devin-test/prompt.template.md`. The prefix `//` resolves
+# against the city root (see `Agent.PromptTemplate` doc).
+#
+# To bootstrap a city with this rig:
+#
+#   cp -r e2e/rig/agents /tmp/gc-e2e-<runId>/agents
+#   cp e2e/rig/pack.toml  /tmp/gc-e2e-<runId>/pack.toml
+#   cp e2e/rig/city.toml  /tmp/gc-e2e-<runId>/city.toml
+#   gc init --file /tmp/gc-e2e-<runId>/city.toml \
+#           --preserve-existing /tmp/gc-e2e-<runId>
+#
+# `gc init --file` bypasses the provider-readiness preflight that
+# `gc init --default-provider` enforces (claude/codex require the
+# CLI to be on PATH); `devin` is not on the readiness-check
+# whitelist, so we sidestep it. `--preserve-existing` keeps the
+# hand-authored agent + prompt files in place instead of overwriting
+# them.
+
+[workspace]
+name = "gc-e2e"
+
+[[agent]]
+name = "devin-test"
+# Lifecycle "one_shot" tells the controller to treat a clean exit 0
+# as expected work completion instead of "agent died on startup",
+# which avoids restart churn between spec runs.
+lifecycle = "one_shot"
+
+# `start_command` is a Go text/template — see
+# `internal/config/config.go:3190-3191`. We use `sh -c '...'` so we
+# can interpolate env vars set by the supervisor (`GC_CITY_PATH`,
+# `GC_SESSION_ID`) at session-spawn time.
+#
+# The devin prompt is intentionally short: devin is told exactly
+# what to do (write the marker file, close the bead, exit) with no
+# ambiguity. The city path comes from the supervisor's env so each
+# spec run gets its own marker directory without rebuilding this
+# file. `bd` is invoked via the supervisor-published bead id.
+start_command = '''
+sh -c '
+  devin -p "You are running inside the gascity e2e test rig. Your only job is to verify the sling → pickup → close pipeline works. Steps: (1) read the city path from $GC_CITY_PATH; (2) write the file $GC_CITY_PATH/marker with the literal content done (plus a newline); (3) run gc bd close $GC_SESSION_ID to close the bead; (4) exit 0. Do not do anything else. Do not ask follow-up questions. If any step fails, still exit 0 so the e2e spec can probe for the marker and the closed bead independently." --permission-mode accept-edits
+'
+'''
+
+# Prompt template ships alongside this toml at
+# `agents/devin-test/prompt.template.md` and is loaded into devin's
+# system context. The template is mostly a fallback in case devin
+# falls back to interactive mode; under `--permission-mode accept-edits`
+# it should never actually surface.
+prompt_template = "//agents/devin-test/prompt.template.md"

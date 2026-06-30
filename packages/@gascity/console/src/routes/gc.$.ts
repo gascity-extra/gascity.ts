@@ -1,17 +1,12 @@
 /**
- * Production passthrough to the gc supervisor API.
+ * Catch-all passthrough to the gc supervisor API.
  *
- * Mirrors the Vite dev proxy in vite.config.ts so the browser can call
- * `/gc/<path>` on the same origin in both dev and the published Worker.
- * The Worker hits whatever `GC_API_BASE_URL` resolves to from its runtime
- * env (defaults to `http://127.0.0.1:8372`, only reachable when the
- * Worker shares a network with the supervisor — useful for self-hosted
- * deploys; in the hosted Worker you'd set GC_API_BASE_URL to a public URL).
+ * In dev, Vite proxies /gc/* to GC_API_BASE_URL (see vite.config.ts). In
+ * production, the deployed worker proxies via this server route handler.
  *
  * Authentication:
- * - Clients can provide their own Bearer token via Authorization header
- * - If no token is provided, falls back to server-side GC_API_TOKEN env var
- * - This allows both client-side auth (user's own token) and server-to-server auth
+ * - Clients can provide their own Bearer token via Authorization header.
+ * - If no token is provided, falls back to server-side GC_API_TOKEN.
  */
 
 import { createFileRoute } from "@tanstack/react-router";
@@ -20,15 +15,16 @@ const METHODS = ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"] as const;
 
 function baseUrl(): string {
   return (
-    process.env.GC_API_BASE_URL?.replace(/\/$/, "") ||
+    (typeof process !== "undefined" && process.env?.GC_API_BASE_URL?.replace(/\/$/, "")) ||
     "http://127.0.0.1:8372"
   );
 }
 
 function authHeaders(incomingToken?: string): Record<string, string> {
-  // Prefer token from request header if provided (client-side auth)
-  // Fall back to server-side GC_API_TOKEN for server-to-server calls
-  const token = incomingToken || process.env.GC_API_TOKEN;
+  let token = incomingToken;
+  if (!token && typeof process !== "undefined") {
+    token = process.env?.GC_API_TOKEN;
+  }
   return token ? { Authorization: `Bearer ${token}` } : {};
 }
 
@@ -36,16 +32,14 @@ async function proxy(request: Request, splat: string | undefined) {
   const incoming = new URL(request.url);
   const target = baseUrl() + "/" + (splat ?? "") + incoming.search;
 
-  // Extract token from incoming request for client-side auth
   const incomingAuth = request.headers.get("authorization");
   const incomingToken = incomingAuth?.replace(/^Bearer\s+/i, "");
 
-  // Strip hop-by-hop and host headers before forwarding.
   const fwd = new Headers(request.headers);
   fwd.delete("host");
   fwd.delete("connection");
   fwd.delete("content-length");
-  fwd.delete("authorization"); // Don't forward incoming auth, use our own
+  fwd.delete("authorization");
   for (const [k, v] of Object.entries(authHeaders(incomingToken))) fwd.set(k, v);
 
   const init: RequestInit = {
@@ -60,7 +54,6 @@ async function proxy(request: Request, splat: string | undefined) {
 
   try {
     const res = await fetch(target, init);
-    // Pass through status/headers/body as-is.
     return new Response(res.body, {
       status: res.status,
       statusText: res.statusText,

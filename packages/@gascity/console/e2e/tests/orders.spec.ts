@@ -1,14 +1,14 @@
 import { test, expect } from '@playwright/test';
 
 test.describe('Orders Tests', () => {
-  test.beforeEach(async ({ page }) => {
-    await page.goto('http://localhost:8080');
+  test.beforeEach(async ({ page, baseURL }) => {
+    await page.goto(`${baseURL}/`);
     await page.waitForLoadState('domcontentloaded');
   });
 
-  test('navigate to orders page', async ({ page }) => {
+  test('navigate to orders page', async ({ page, baseURL }) => {
     // Navigate to orders page
-    await page.goto('http://localhost:8080/orders', { waitUntil: 'domcontentloaded' });
+    await page.goto(`${baseURL}/orders`, { waitUntil: 'domcontentloaded' });
     
     // Wait for page to render
     await page.waitForTimeout(2000);
@@ -21,9 +21,9 @@ test.describe('Orders Tests', () => {
     await expect(body).toBeVisible();
   });
 
-  test('orders page displays order list', async ({ page }) => {
+  test('orders page displays order list', async ({ page, baseURL }) => {
     // Navigate to orders page
-    await page.goto('http://localhost:8080/orders', { waitUntil: 'domcontentloaded' });
+    await page.goto(`${baseURL}/orders`, { waitUntil: 'domcontentloaded' });
     await page.waitForTimeout(2000);
     
     // Look for order-related content
@@ -31,9 +31,9 @@ test.describe('Orders Tests', () => {
     expect(pageContent.toLowerCase()).toMatch(/orders|orchestrator/);
   });
 
-  test('can select order', async ({ page }) => {
+  test('can select order', async ({ page, baseURL }) => {
     // Navigate to orders page
-    await page.goto('http://localhost:8080/orders', { waitUntil: 'domcontentloaded' });
+    await page.goto(`${baseURL}/orders`, { waitUntil: 'domcontentloaded' });
     await page.waitForTimeout(2000);
     
     // Look for order items (clickable rows)
@@ -54,9 +54,9 @@ test.describe('Orders Tests', () => {
     }
   });
 
-  test('orders page has fire and toggle buttons', async ({ page }) => {
+  test('orders page has fire and toggle buttons', async ({ page, baseURL }) => {
     // Navigate to orders page
-    await page.goto('http://localhost:8080/orders', { waitUntil: 'domcontentloaded' });
+    await page.goto(`${baseURL}/orders`, { waitUntil: 'domcontentloaded' });
     await page.waitForTimeout(2000);
     
     // Look for fire button
@@ -70,7 +70,7 @@ test.describe('Orders Tests', () => {
     // At least one of these should exist if orders are present
     if (fireCount > 0 || toggleCount > 0) {
       // Buttons exist
-      console.log('Order action buttons found');
+      await expect(fireButton.or(toggleButton)).toBeVisible();
     } else {
       // No orders available
       console.log('No orders - no action buttons');

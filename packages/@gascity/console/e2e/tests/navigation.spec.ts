@@ -1,13 +1,13 @@
 import { test, expect } from '@playwright/test';
 
 test.describe('Navigation Tests', () => {
-  test.beforeEach(async ({ page }) => {
+  test.beforeEach(async ({ page, baseURL }) => {
     // Navigate to the console UI
-    await page.goto('http://localhost:8080');
+    await page.goto(`${baseURL}/`);
     await page.waitForLoadState('domcontentloaded');
   });
 
-  test('navigate to cities page', async ({ page }) => {
+  test('navigate to cities page', async ({ page, baseURL }) => {
     // Click on cities navigation
     const citiesLink = page.getByRole('link', { name: /cities/i });
     await citiesLink.click();
@@ -19,22 +19,22 @@ test.describe('Navigation Tests', () => {
     await expect(page).toHaveURL(/\/cities/);
   });
 
-  test('can access packs page', async ({ page }) => {
-    // Navigate to packs page
-    await page.goto('http://localhost:8080/packs');
+  test('can access marketplace page', async ({ page, baseURL }) => {
+    // Navigate to marketplace page
+    await page.goto(`${baseURL}/marketplace`);
     await page.waitForLoadState('domcontentloaded');
-    
-    // Check that we're on the packs page
-    await expect(page).toHaveURL(/\/packs/);
-    
+
+    // Check that we're on the marketplace page
+    await expect(page).toHaveURL(/\/marketplace/);
+
     // Check that the page has content
     const body = page.locator('body');
     await expect(body).toBeVisible();
   });
 
-  test('can access formulas page', async ({ page }) => {
+  test('can access formulas page', async ({ page, baseURL }) => {
     // Navigate to formulas page
-    await page.goto('http://localhost:8080/formulas');
+    await page.goto(`${baseURL}/formulas`);
     await page.waitForLoadState('domcontentloaded');
     
     // Check that we're on the formulas page
@@ -45,9 +45,9 @@ test.describe('Navigation Tests', () => {
     await expect(body).toBeVisible();
   });
 
-  test('can access orders page', async ({ page }) => {
+  test('can access orders page', async ({ page, baseURL }) => {
     // Navigate to orders page
-    await page.goto('http://localhost:8080/orders', { waitUntil: 'domcontentloaded' });
+    await page.goto(`${baseURL}/orders`, { waitUntil: 'domcontentloaded' });
     
     // Wait a bit for the page to render
     await page.waitForTimeout(2000);
@@ -60,9 +60,9 @@ test.describe('Navigation Tests', () => {
     await expect(body).toBeVisible();
   });
 
-  test('can access endpoints page', async ({ page }) => {
+  test('can access endpoints page', async ({ page, baseURL }) => {
     // Navigate to endpoints page
-    await page.goto('http://localhost:8080/endpoints');
+    await page.goto(`${baseURL}/endpoints`);
     await page.waitForLoadState('domcontentloaded');
     
     // Check that we're on the endpoints page

@@ -11,6 +11,53 @@ Modern Console UI for managing Gas City resources, built with TanStack Start.
 - 🎨 Modern, responsive UI
 - 🚀 Fast development with TanStack Start
 
+## What's real, what's stubbed
+
+Every UI surface is backed by a server function in `src/lib/gc.functions.ts`.
+This table lists which ones actually call the real `gc` CLI / supervisor API
+versus which are stubs (still being wired up):
+
+| Route / surface | Server fn | Backend | Status |
+|---|---|---|---|
+| `/` sessions list | `gcListSessions`, `gcTmuxStatus` | real `GET /v0/city/{city}/sessions` | real |
+| `+ sling task` composer | `gcSling` | real `gc sling --json` via `runGc` | real |
+| Header supervisor popover | `gcSupervisor*` | real `gc start\|stop\|restart` + `/health`, `/v0/events` | real |
+| `/mail` | `gcMailInbox`, `gcMailSend` | real | real |
+| `/beads` list | `gcListBeads` | real | real |
+| `/beads` close button | `gcCloseBead` | real `gc bd close` via `runGc` | real |
+| `/formulas` + `/formulas/$name` | `gcListFormulas`, `gcFormulaShow/Run/Status` | real | real |
+| `/orders` | `gcListOrders`, `gcOrder*` | real | real |
+| `/cities` | `gcListCities`, `gcCityStart`, `gcCityStop`, `gcCityInitWithPacks`, `gcListPacks` | real | real |
+| `/marketplace` | `gcListMarketplaceEntries`, install/uninstall, registries, updates | real | real |
+| `/endpoints` | `gcDoltState`, `gcRigEndpoints`, `gcRepairPortMirror` | real | real |
+| `/sessions/$name` PTY attach | `gcTmux*` + `/api/pty` | real (node-pty + tmux) | real |
+| Cmd-K palette, keyboard nav, sidebar | UI only | n/a | real |
+
+All listed server functions call into real `gc` paths. The earlier
+stub implementations of `gcSling` and `gcCloseBead` (which returned
+hard-coded `ok: true` strings) have been replaced with `runGc`-based
+spawns; see the `gcSling` and `gcCloseBead` exports in
+`src/lib/gc.functions.ts` (search for `export const gcSling` and
+`export const gcCloseBead`). The sling output parser accepts both the
+machine-readable `--json` envelope and the human-readable stdout
+(`Created <id>`, `Slung <id> → ...`, etc.); bead-id regex covers
+per-rig-configured prefixes (e.g. `BL-42`, `FE-1`) as well as the
+legacy `gd-…` / `bd-…` forms — see `parseSlingOutput` and the
+`BEAD_ID_RE` validator, both in `src/lib/gc.functions.ts`.
+
+## Test rig
+
+The `sling-pickup` end-to-end scenario (`e2e/scenarios/sling-pickup.spec.ts`)
+is backed by a single Devin-CLI-driven rig agent defined in
+`e2e/rig/`. The rig's `start_command` invokes `devin -p "…"` in
+non-interactive mode and the agent writes a marker file at the
+slung city's path before closing its assigned bead — proving the
+full UI → `gc sling` → rig → agent → close wire. Devin discovers
+its own provider/key from `~/.config/devin/`; no API key is
+hardcoded in this repo. See `e2e/rig/README.md` for the bootstrap
+recipe and `e2e/rig/agents/devin-test/agent.toml` for the rig agent
+definition.
+
 ## Development
 
 ### Prerequisites

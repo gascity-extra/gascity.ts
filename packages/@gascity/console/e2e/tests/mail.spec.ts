@@ -1,14 +1,14 @@
 import { test, expect } from '@playwright/test';
 
 test.describe('Mail Tests', () => {
-  test.beforeEach(async ({ page }) => {
-    await page.goto('http://localhost:8080');
+  test.beforeEach(async ({ page, baseURL }) => {
+    await page.goto(`${baseURL}/`);
     await page.waitForLoadState('domcontentloaded');
   });
 
-  test('navigate to mail page', async ({ page }) => {
+  test('navigate to mail page', async ({ page, baseURL }) => {
     // Navigate to mail page
-    await page.goto('http://localhost:8080/mail');
+    await page.goto(`${baseURL}/mail`);
     await page.waitForLoadState('domcontentloaded');
     
     // Check that we're on mail page
@@ -19,9 +19,9 @@ test.describe('Mail Tests', () => {
     await expect(body).toBeVisible();
   });
 
-  test('mail page displays city and agent selectors', async ({ page }) => {
+  test('mail page displays city and agent selectors', async ({ page, baseURL }) => {
     // Navigate to mail page
-    await page.goto('http://localhost:8080/mail');
+    await page.goto(`${baseURL}/mail`);
     await page.waitForLoadState('domcontentloaded');
     
     // Look for city selector
@@ -37,9 +37,9 @@ test.describe('Mail Tests', () => {
     }
   });
 
-  test('can open compose drawer', async ({ page }) => {
+  test('can open compose drawer', async ({ page, baseURL }) => {
     // Navigate to mail page
-    await page.goto('http://localhost:8080/mail');
+    await page.goto(`${baseURL}/mail`);
     await page.waitForLoadState('domcontentloaded');
     
     // Click on compose button
@@ -58,9 +58,9 @@ test.describe('Mail Tests', () => {
     await page.waitForTimeout(500);
   });
 
-  test('can fill compose form', async ({ page }) => {
+  test('can fill compose form', async ({ page, baseURL }) => {
     // Navigate to mail page
-    await page.goto('http://localhost:8080/mail');
+    await page.goto(`${baseURL}/mail`);
     await page.waitForLoadState('domcontentloaded');
     
     // Click on compose button
@@ -87,5 +87,8 @@ test.describe('Mail Tests', () => {
     // Close compose drawer
     await composeButton.click();
     await page.waitForTimeout(500);
+
+    // Verify compose drawer is closed
+    await expect(page.locator('[role="dialog"]')).toHaveCount(0);
   });
 });

@@ -1,13 +1,13 @@
 import { test, expect } from '@playwright/test';
 
 test.describe('Basic UI Tests', () => {
-  test.beforeEach(async ({ page }) => {
+  test.beforeEach(async ({ page, baseURL }) => {
     // Navigate to the console UI
-    await page.goto('http://localhost:8080');
+    await page.goto(`${baseURL}/`);
     await page.waitForLoadState('domcontentloaded');
   });
 
-  test('console UI loads and shows navigation', async ({ page }) => {
+  test('console UI loads and shows navigation', async ({ page, baseURL }) => {
     // Check that the page loads successfully
     await expect(page).toHaveTitle(/gc console|Sessions/);
     
@@ -16,9 +16,9 @@ test.describe('Basic UI Tests', () => {
     await expect(citiesLink).toBeVisible();
   });
 
-  test('cities page displays city list', async ({ page }) => {
+  test('cities page displays city list', async ({ page, baseURL }) => {
     // Navigate to cities page
-    await page.goto('http://localhost:8080/cities');
+    await page.goto(`${baseURL}/cities`);
     await page.waitForLoadState('domcontentloaded');
     
     // Check that the page has content

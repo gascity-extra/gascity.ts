@@ -29,25 +29,25 @@ function FormulaDetail() {
 
   const { data: detail, isLoading } = useQuery({
     queryKey: ["gc", "formula", name],
-    queryFn: () => show({ data: { name } }),
+    queryFn: () => show({ data: { name }}),
   });
 
   const { data: runtime } = useQuery({
     queryKey: ["gc", "formula", name, "status"],
-    queryFn: () => status({ data: { name } }),
+    queryFn: () => status({ data: { name }}),
     enabled: live,
     refetchInterval: 2000,
   });
 
   const runMut = useMutation({
-    mutationFn: () => run({ data: { name } }),
+    mutationFn: () => run({ data: { name }}),
     onSuccess: () => {
       setLive(true);
       qc.invalidateQueries({ queryKey: ["gc", "formula", name, "status"] });
     },
   });
 
-  const steps = mergeSteps(detail?.formula?.steps, runtime);
+  const steps = mergeSteps(detail?.formula?.steps, runtime?.steps);
 
   return (
     <AppShell>
@@ -164,16 +164,14 @@ function FormulaDetail() {
   );
 }
 
-function StepStatusDot({ status }: { status?: string }) {
+function StepStatusDot({ status }: Readonly<{ status?: string }>) {
   const s = (status ?? "").toLowerCase();
-  const cls =
-    s === "closed" || s === "done"
-      ? "bg-foreground"
-      : s === "in_progress" || s === "running"
-        ? "live-dot"
-        : s === "blocked" || s === "failed"
-          ? "bg-destructive"
-          : "bg-border";
+  const cls = (() => {
+    if (s === "closed" || s === "done") return "bg-foreground"
+    if (s === "in_progress" || s === "running") return "live-dot"
+    if (s === "blocked" || s === "failed") return "bg-destructive"
+    return "bg-border"
+  })();
   return <span className={clsx("inline-block h-1.5 w-1.5 rounded-full", cls)} />;
 }
 

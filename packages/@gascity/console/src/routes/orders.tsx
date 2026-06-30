@@ -34,12 +34,12 @@ function OrdersPage() {
 
   const { data: detail } = useQuery({
     queryKey: ["gc", "order", selected],
-    queryFn: () => show({ data: { name: selected! } }),
+    queryFn: () => show({ data: { name: selected! }}),
     enabled: !!selected,
   });
 
   const runMut = useMutation({
-    mutationFn: (name: string) => run({ data: { name } }),
+    mutationFn: (name: string) => run({ data: { name }}),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["gc", "orders"] }),
   });
 
@@ -74,11 +74,11 @@ function OrdersPage() {
               {(data ?? []).map((o) => {
                 const active = selected === o.name;
                 return (
-                  <li
+                  <button
                     key={o.name}
                     onClick={() => setSelected(o.name)}
                     className={clsx(
-                      "grid cursor-pointer grid-cols-[1fr_70px_80px_90px_auto] items-center gap-3 border-b border-border px-6 py-2.5",
+                      "grid cursor-pointer grid-cols-[1fr_70px_80px_90px_auto] items-center gap-3 border-b border-border px-6 py-2.5 w-full text-left",
                       active ? "bg-muted" : "hover:bg-muted/40",
                     )}
                   >
@@ -91,6 +91,7 @@ function OrdersPage() {
                             due
                           </span>
                         )}
+                        {" "}
                       </div>
                       {o.description && (
                         <div className="truncate font-mono text-[11px] text-muted-foreground">
@@ -107,10 +108,7 @@ function OrdersPage() {
                     <span className="font-mono text-[11px] text-muted-foreground">
                       {o.interval ?? o.schedule ?? o.on ?? "—"}
                     </span>
-                    <div
-                      className="flex items-center gap-1"
-                      onClick={(e) => e.stopPropagation()}
-                    >
+                    <div className="flex items-center gap-1">
                       <button
                         onClick={() =>
                           toggleMut.mutate({
@@ -136,7 +134,7 @@ function OrdersPage() {
                         fire
                       </button>
                     </div>
-                  </li>
+                  </button>
                 );
               })}
             </ul>
