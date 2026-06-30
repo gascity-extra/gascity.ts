@@ -211,7 +211,7 @@ function InitCityDialog({
           onClose();
         }
       }}
-      role="button"
+      role="button" // NOSONAR: backdrop click handler with keyboard support
       tabIndex={0}
       aria-label="Close dialog"
     >

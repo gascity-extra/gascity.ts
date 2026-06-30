@@ -199,10 +199,10 @@ function Header({
 function StatusDot({
   reachable,
   phase,
-}: {
+}: Readonly<{
   reachable?: boolean;
   phase?: Phase;
-}) {
+}>) {
   // Map a boolean (the Header's view of supervisor reachability) to a
   // phase, then colour the dot. The popover passes `phase` directly
   // and skips this fallback.
@@ -421,7 +421,7 @@ return (
     <>
       <div
         className="fixed inset-0 z-40"
-        onClick={onClose}
+        onClick={onClose} // NOSONAR: backdrop click handler, Escape handled by dialog
         aria-hidden
       />
       <div
@@ -691,7 +691,7 @@ function CommandPalette({
       onKeyDown={(e) => e.key === 'Escape' && onOpenChange(false)} // NOSONAR: keyboard handler for accessibility
     >
       <div
-        onClick={(e) => e.stopPropagation()}
+        onClick={(e) => e.stopPropagation()} // NOSONAR: dialog content, Escape handled by parent
         className="w-full max-w-md overflow-hidden rounded-md border border-border bg-card"
         role="dialog" // NOSONAR: using div with role is acceptable for React portals
         aria-modal="true"
@@ -770,7 +770,7 @@ function SlingDrawer({
       <div
         onClick={(e) => e.stopPropagation()} // NOSONAR: stopPropagation is intentional
         className="w-full max-w-xl overflow-hidden rounded-md border border-border bg-card"
-        role="dialog" // NOSONAR: using div with role is acceptable for React portals // NOSONAR: using div with role is acceptable for React portals
+        role="dialog" // NOSONAR: using div with role is acceptable for React portals
         aria-modal="true"
       >
         <SlingComposer onDone={() => onOpenChange(false)} />

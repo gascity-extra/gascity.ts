@@ -70,7 +70,7 @@ test.describe('Orders Tests', () => {
     // At least one of these should exist if orders are present
     if (fireCount > 0 || toggleCount > 0) {
       // Buttons exist
-      console.log('Order action buttons found');
+      await expect(fireButton.or(toggleButton)).toBeVisible();
     } else {
       // No orders available
       console.log('No orders - no action buttons');

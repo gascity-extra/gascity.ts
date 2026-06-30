@@ -172,12 +172,12 @@ function MarketplacePage() {
   const removeRegistryMut = useMutation({
     mutationFn: (name: string) => removeRegistryFn({ data: { name } }),
     onSuccess: (r: { ok: boolean; output: string; error?: string }) => {
-      if (!r.ok) {
-        setGlobalError(r.error ?? r.output ?? "remove registry failed")
-      } else {
+      if (r.ok) {
         setGlobalError(null)
         setFeedback(r.output)
         invalidateAll()
+      } else {
+        setGlobalError(r.error ?? r.output ?? "remove registry failed")
       }
     },
     onError: (e) => setGlobalError(e instanceof Error ? e.message : String(e)),
@@ -187,12 +187,12 @@ function MarketplacePage() {
     mutationFn: (name?: string) =>
       name ? refreshRegistriesFn({ data: { name } }) : refreshRegistriesFn({ data: {} }),
     onSuccess: (r: { ok: boolean; output: string; error?: string }) => {
-      if (!r.ok) {
-        setGlobalError(r.error ?? r.output ?? "refresh failed")
-      } else {
+      if (r.ok) {
         setGlobalError(null)
         setFeedback(r.output)
         invalidateAll()
+      } else {
+        setGlobalError(r.error ?? r.output ?? "refresh failed")
       }
     },
     onError: (e) => setGlobalError(e instanceof Error ? e.message : String(e)),
@@ -305,12 +305,14 @@ function MarketplacePage() {
         <div className="flex items-center gap-1 border-b border-border px-6 py-1.5">
           <TabButton active={tab === "browse"} onClick={() => setTab("browse")}>
             browse
+            {" "}
             <span className="ml-1.5 text-muted-foreground">{entries.length}</span>
           </TabButton>
           <TabButton active={tab === "installed"} onClick={() => setTab("installed")}>
             installed
-            <span className="ml-1.5 text-muted-foreground">{installedList.length}</span>
             {" "}
+            <span className="ml-1.5 text-muted-foreground">{installedList.length}</span>
+            {" "}{" "}
             {updateAvailableCount > 0 && (
               <Badge variant="default" className="ml-2 font-mono text-[10px]">
                 {updateAvailableCount} update{updateAvailableCount === 1 ? "" : "s"}

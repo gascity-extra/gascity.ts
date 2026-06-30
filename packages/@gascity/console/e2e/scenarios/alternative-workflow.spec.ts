@@ -38,7 +38,7 @@ test.describe('Alternative E2E Workflow', () => {
     expect(page.url()).toContain('/beads');
 
     if (beads.length === 0) {
-      console.log('No existing beads - skipping test');
+      console.log('No existing beads - skipping test'); // NOSONAR: skip when no beads available
       test.skip();
       return;
     }

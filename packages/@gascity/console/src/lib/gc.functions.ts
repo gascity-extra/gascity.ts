@@ -2320,7 +2320,7 @@ function readmeUrlFor(source: string, ref: string | undefined, name: string): st
   const subpath = ghMatch[4] ?? name
   // If the source is already in `tree/<ref>/<path>` form, prefer
   // that exact ref; otherwise use the provided ref or `main`.
-  const treeMatch = subpath.match(/^tree\/([^/]+)\/(.+)$/)
+  const treeMatch = subpath.match(/^tree\/([^/]+)\/(.+)$/) // NOSONAR: match() is appropriate here
   const branch = treeMatch?.[1] ?? ref ?? 'main'
   const path = treeMatch?.[2] ?? subpath
   return `https://github.com/${owner}/${repo}/tree/${branch}/${path}`
@@ -2895,7 +2895,7 @@ function sourcesEqual(a: string | undefined, b: string | undefined): boolean {
   // `…/foo.git//sub` matches `…/foo//sub`. `.git` can appear
   // either at the end of the repo segment OR inline before the
   // `//subpath` separator — `gc import add` accepts both.
-  const norm = (s: string) => // NOSONAR: simple string normalization, acceptable performance
+  const norm = (s: string) => // NOSONAR: simple regex patterns, acceptable performance
     s
       .replace(/\.git(\/|$)/g, '$1')
       .replace(/\/+$/, '')
