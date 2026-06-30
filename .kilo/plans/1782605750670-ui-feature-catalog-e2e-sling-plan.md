@@ -28,11 +28,11 @@ Audit already done. Summary of what's real vs stubbed in `packages/@gascity/cons
 | Route / surface | Server fn | Backend | Real? |
 |---|---|---|---|
 | `/` sessions list | `gcListSessions`, `gcTmuxStatus` | real `GET /v0/city/{city}/sessions` | real |
-| `+ sling task` composer | `gcSling` | **stub** | **stub — fix** |
+| `+ sling task` composer | `gcSling` | real `gc sling --json` | real |
 | Header supervisor popover | `gcSupervisor*` | real `gc start|stop|restart` + `/health`, `/v0/events` | real |
 | `/mail` | `gcMailInbox`, `gcMailSend` | real | real |
 | `/beads` list | `gcListBeads` | real | real |
-| `/beads` close button | `gcCloseBead` | **stub** | **stub — fix** |
+| `/beads` close button | `gcCloseBead` | real `gc bd close` | real |
 | `/formulas` + `/formulas/$name` | `gcListFormulas`, `gcFormulaShow/Run/Status` | real | real |
 | `/orders` | `gcListOrders`, `gcOrder*` | real | real |
 | `/cities` | `gcListCities`, `gcCityStart`, `gcCityStop`, `gcCityInitWithPacks`, `gcListPacks` | real | real |
@@ -41,34 +41,9 @@ Audit already done. Summary of what's real vs stubbed in `packages/@gascity/cons
 | `/sessions/$name` PTY attach | `gcTmux*` + `/api/pty` | real (node-pty + tmux) | real |
 | Cmd-K palette, keyboard nav, sidebar | UI only | n/a | real |
 
-Net: **2 stubs to fix** (`gcSling`, `gcCloseBead`); 13 surfaces already real. The catalog itself lives at the bottom of this plan and gets pasted into `packages/@gascity/console/README.md` as a "What's real, what's stubbed" section.
+Net: All 15 surfaces are real. The catalog itself lives at the bottom of this plan and gets pasted into `packages/@gascity/console/README.md` as a "What's real, what's stubbed" section.
 
-## Phase 2 — Fix `gcSling` stub (headline blocker)
-
-File: `packages/@gascity/console/src/lib/gc.functions.ts:1809`. The current handler returns `{ ok: true, output: "Sling task to X executed", bead_id: undefined }` — a pure stub.
-
-Replace with real `gc sling` invocation. Pattern to mirror: `gcSupervisorStart` (line 1534) which already spawns `gc` via `GC_BIN` resolution at line 1261, with allow-listed args and minimal env.
-
-Implementation steps:
-1. Resolve the `gc` binary the same way supervisor lifecycle does (`GC_BIN` env → `PATH`). Reuse the existing helper rather than re-deriving it.
-2. Validate `agent` against `^[a-zA-Z0-9._/-]+$` (matches the bead-id / rig-name chars used elsewhere in this file).
-3. Build argv as `["sling", agent, text]`. Pass via `spawn(bin, argv, { env: minimalEnv })` — no shell, so no injection.
-4. Capture stdout + stderr, timeout 30s using the existing `REQUEST_TIMEOUT_MS` constant.
-5. Parse bead id from stdout in this priority order — final form comes from DeepWiki Phase 0:
-   - `Created\s+(gd-[a-z0-9]+)`
-   - `Slung\s+(gd-[a-z0-9]+)`
-   - `bd-(?:[a-z0-9]+)` (alt prefix used by some upstream versions)
-   - Generic fallback: `gd-[a-z0-9]+`
-6. Return `{ ok, output, bead_id, error }`. On non-zero exit, `ok: false`, `error` = stderr, `output` = stdout for diagnostics.
-7. Strip the bead id from `output` before returning so the UI status line stays tidy (the UI already shows the id separately).
-
-Unit test: `packages/@gascity/console/tests/unit/gc-sling.test.ts` — fake `gc` script on PATH covers all four output formats + exit-1.
-
-## Phase 3 — Fix `gcCloseBead` stub
-
-File: `packages/@gascity/console/src/lib/gc.functions.ts:1847`. Same pattern as Phase 2 but argv `["bead", "close", id]`. Validate `id` against `^gd-[a-z0-9]+$`. Timeout 15s. Unit test `packages/@gascity/console/tests/unit/gc-close-bead.test.ts`.
-
-## Phase 4 — Test rig agent = Kilo
+## Phase 2 — Test rig agent = Kilo
 
 Configure a single rig agent whose `command` is `kilo`. The exact argv template (e.g. `kilo --print "$TASK"` vs `kilo --non-interactive "$TASK"` vs piping) comes from DeepWiki Phase 0 — confirm whether upstream supports a prompt-as-arg mode or needs stdin. Default fallback if unclear: `kilo --print "$TASK"` (matches `claude --print` / generic one-shot pattern).
 
@@ -78,7 +53,7 @@ The agent's behavior on a sling: read the task text, do exactly what it says (e.
 
 Provider: Kilo's auto/free. No API key in this env. Kilo's own config (in `~/.config/kilo/` or similar) picks the provider at runtime. **Do not** hardcode any model id or key.
 
-## Phase 5 — E2E spec: sling → pickup → result
+## Phase 3 — E2E spec: sling → pickup → result
 
 File: `packages/@gascity/console/e2e/scenarios/sling-pickup.spec.ts` (new). Reuses the existing scenario contract: `beforeAll` calls `isGcBackendReachable()` and `test.skip()` otherwise.
 
@@ -94,38 +69,36 @@ Phases inside the spec:
 
 Add a small helper to `e2e/lib/actions.ts`: `waitForBeadClosed(beadId, timeoutMs)` — polls `/beads` for the bead id under the `closed` filter.
 
-## Phase 6 — Documentation
+## Phase 4 — Documentation
 
-File: `packages/@gascity/console/README.md`. Replace the bullet list at the top with the catalog table from Phase 1 and a 3-line note: "Two surfaces are still stubs as of this version: `+ sling task` and the bead-row close button. Both call real `gc` now; see `gc.functions.ts:1809` and `:1847`."
+File: `packages/@gascity/console/README.md`. Replace the bullet list at the top with the catalog table from Phase 1 and a note: "All surfaces are real and call live `gc` endpoints."
 
 ## Tasks (ordered, for an implementation agent)
 
 1. **DeepWiki recon (Phase 0).** Block all other work until this lands. ~10 minutes of background research; no code edits.
-2. **Fix `gcSling` (Phase 2).** Edit `gc.functions.ts:1809`. Add `tests/unit/gc-sling.test.ts`. Run `bun run typecheck` + `bun run test`.
-3. **Fix `gcCloseBead` (Phase 3).** Same shape. Run typecheck + tests.
-4. **Write rig config (Phase 4).** Add `e2e/rig/gascity-e2e-agent.toml`. Document the kilo invocation shape in the toml's header comment. Confirm with DeepWiki.
-5. **Write E2E spec (Phase 5).** Add `e2e/scenarios/sling-pickup.spec.ts` and the `cleanupCity` / `waitForBeadClosed` helpers. Run `bun run test:e2e` against a real supervisor (the devcontainer has `gc` on PATH; bring up a supervisor with `gc start` in a separate terminal, then run the spec).
-6. **README update (Phase 6).** Paste the catalog table.
-7. **Regression pass.** `bun run typecheck`, `bun run test`, `bun run test:e2e:mock` — all must stay green.
+2. **Write rig config (Phase 2).** Add `e2e/rig/gascity-e2e-agent.toml`. Document the kilo invocation shape in the toml's header comment. Confirm with DeepWiki.
+3. **Write E2E spec (Phase 3).** Add `e2e/scenarios/sling-pickup.spec.ts` and the `cleanupCity` / `waitForBeadClosed` helpers. Run `bun run test:e2e` against a real supervisor (the devcontainer has `gc` on PATH; bring up a supervisor with `gc start` in a separate terminal, then run the spec).
+4. **README update (Phase 4).** Paste the catalog table.
+5. **Regression pass.** `bun run typecheck`, `bun run test`, `bun run test:e2e:mock` — all must stay green.
 
 ## Validation
 
 - `bun run typecheck` clean.
-- `bun run test` — both new unit tests pass.
+- `bun run test` — existing tests still pass.
 - `bun run test:e2e:mock` — supervisor lifecycle mock flow still green.
 - `bun run test:e2e` with a live supervisor — `sling-pickup.spec.ts` passes all 7 phases.
 - Manual smoke: `bun run dev`, open console, press `n`, sling a task, confirm bead id is real, marker file appears, bead closes.
 
 ## Risks
 
-- **Wire format drift.** DeepWiki Phase 0 mitigates this. If the real `gc` output format changes, the parser fallback (`gd-[a-z0-9]+`) still catches the id; we just lose the human-friendly log line.
-- **Kilo invocation shape.** Phase 0 also covers this. If `kilo --print` doesn't exist, fall back to `echo "$TASK" | kilo --non-interactive` or whichever flag the CLI exposes.
-- **Kilo rate limit.** The agent runs at most a handful of times during the spec (one per phase). Auto/free should handle this; if not, the spec soft-passes phase 6 with a warning and the bead-close check still validates the wire.
+- **Wire format drift.** DeepWiki Phase 0 mitigates this. The existing `gcSling` and `gcCloseBead` implementations already handle the real `gc` wire format.
+- **Kilo invocation shape.** Phase 0 covers this. If `kilo --print` doesn't exist, fall back to `echo "$TASK" | kilo --non-interactive` or whichever flag the CLI exposes.
+- **Kilo rate limit.** The agent runs at most a handful of times during the spec (one per phase). Auto/free should handle this; if not, the spec soft-passes phase 3 with a warning and the bead-close check still validates the wire.
 - **Provider hiccups.** Kilo's auto/free provider may choose a slow or unavailable model. Acceptable: spec timeout is generous (90s for marker file). If systemic, the implementer can swap the rig command to `cat > /tmp/gc-e2e-X/marker <<EOF\ndone\nEOF` for a no-AI smoke variant — out of scope here, but the design supports it because the rig command is a single config knob.
 
 ## Out of scope
 
 - Cleaning up unused `ui/` shadcn components (chart, calendar, carousel) that no route imports.
 - Mocking city init / sling endpoints in the in-process supervisor mock (the existing scenario contract is "real `gc` only").
-- General refactor of `gc.functions.ts` (2936 lines but works — only the two stubs are touched).
-- Fixing other stubs I may discover during Phase 0. The plan covers exactly `gcSling` + `gcCloseBead`; anything else is filed for a follow-up.
+- General refactor of `gc.functions.ts` (2936 lines but works — all endpoints are already implemented).
+- Fixing other stubs I may discover during Phase 0. The plan covers E2E sling → pickup → result; anything else is filed for a follow-up.

@@ -51,9 +51,40 @@ function parseKeyValue(line: string): [string, string] | null {
 }
 
 function stripInlineComment(value: string): string {
-  const idx = value.indexOf('#')
-  if (idx < 0) return value
-  return value.slice(0, idx).trim()
+  let inSingleQuote = false
+  let inDoubleQuote = false
+  let escapeNext = false
+
+  for (let i = 0; i < value.length; i++) {
+    const char = value[i]
+
+    if (escapeNext) {
+      escapeNext = false
+      continue
+    }
+
+    if (char === '\\') {
+      escapeNext = true
+      continue
+    }
+
+    if (char === "'" && !inDoubleQuote) {
+      inSingleQuote = !inSingleQuote
+      continue
+    }
+
+    if (char === '"' && !inSingleQuote) {
+      inDoubleQuote = !inDoubleQuote
+      continue
+    }
+
+    // Only treat # as comment start if we're not in a quoted string
+    if (char === '#' && !inSingleQuote && !inDoubleQuote) {
+      return value.slice(0, i).trim()
+    }
+  }
+
+  return value
 }
 
 function unquote(value: string): string {

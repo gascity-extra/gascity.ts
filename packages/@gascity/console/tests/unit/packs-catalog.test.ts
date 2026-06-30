@@ -1,6 +1,5 @@
 import { describe, it, expect } from 'vitest';
 import {
-  PACK_CATALOG,
   derivePackName,
   PACK_NAME_RE,
 } from '../../src/lib/packs-catalog';
@@ -64,6 +63,3 @@ describe('derivePackName', () => {
     expect(derivePackName('just-a-name')).toBe('just-a-name');
   });
 });
-
-// Touch the constant to keep tree-shakers honest if someone refactors.
-void PACK_CATALOG;

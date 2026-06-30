@@ -30,7 +30,7 @@ Which browser engines to install system dependencies for:
 
 How browser binaries should be managed:
 
-- `auto` - Let Playwright manage browser binaries via `npx playwright install` (recommended)
+- `auto` - Print a reminder to run `npx playwright install` later (browser binaries are NOT installed automatically)
 - `system` - Install system dependencies only, manage browser binaries manually
 
 ## Usage
@@ -70,6 +70,7 @@ Add to your `devcontainer.json`:
     "ghcr.io/devcontainers/features/node:2.1.0": {
       "version": "24"
     },
+    "./features/bun": {},
     "./features/playwright": {
       "browsers": "chromium",
       "installMethod": "auto"

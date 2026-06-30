@@ -75,9 +75,11 @@ export const Route = createFileRoute("/api/pty")({
             "upgrade"
           ];
           probe.websocket = typeof upgrade === "function";
-          probe.ok = probe.nodePty;
+          probe.ok = probe.nodePty && probe.websocket;
           probe.message = probe.ok
             ? "ready — open a WebSocket to attach a session"
+            : probe.nodePty
+            ? "WebSocket upgrade not supported by this runtime"
             : "node-pty not installed. Run `bun add @homebridge/node-pty-prebuilt-multiarch` and restart the dev server.";
         } catch (err) {
           probe.message = err instanceof Error ? err.message : String(err);

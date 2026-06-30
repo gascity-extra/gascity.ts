@@ -60,6 +60,12 @@ install_pkgs \
     libx11-6 \
     libx11-xcb1 \
     libxcb1 \
+    libxcb-dri2-0 \
+    libxcb-dri3-0 \
+    libxcb-glx0 \
+    libxcb-present0 \
+    libxcb-sync1 \
+    libxcb-xfixes0 \
     libxext6 \
     libxrender1 \
     fonts-liberation \
